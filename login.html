@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Sign in - Ponugoti Hospital</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</head>
+<body>
+  <div class="login-wrap">
+    <form class="login-card" id="login-form">
+      <h1>Ponugoti Hospital</h1>
+      <p class="subtitle">Staff sign in</p>
+      <div id="msg"></div>
+      <label class="field">
+        <span>Email</span>
+        <input id="email" type="email" autocomplete="username" required />
+      </label>
+      <label class="field">
+        <span>Password</span>
+        <input id="password" type="password" autocomplete="current-password" required />
+      </label>
+      <button type="submit" class="btn" id="submit-btn">Sign in</button>
+      <p class="muted" style="text-align:center;margin-top:14px;font-size:12px;">
+        Accounts are created by admin. Contact your administrator if you can't sign in.
+      </p>
+    </form>
+  </div>
+
+  <script>
+    (async () => {
+      // If already signed in, jump to dashboard.
+      const user = await getSessionUser();
+      if (user) { window.location.replace("dashboard.html"); return; }
+    })();
+
+    document.getElementById("login-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const msg = document.getElementById("msg");
+      const btn = document.getElementById("submit-btn");
+      const email = document.getElementById("email").value.trim();
+      const password = document.getElementById("password").value;
+      clearMsg(msg);
+      btn.disabled = true; btn.textContent = "Signing in…";
+      const { error } = await window.sb.auth.signInWithPassword({ email, password });
+      btn.disabled = false; btn.textContent = "Sign in";
+      if (error) {
+        showMsg(msg, "error", error.message || "Sign in failed.");
+        return;
+      }
+      window.location.replace("dashboard.html");
+    });
+  </script>
+</body>
+</html>

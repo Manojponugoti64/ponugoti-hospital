@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>New Patient - Ponugoti Hospital</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</head>
+<body>
+  <div class="container" id="page" style="display:none">
+    <div class="page-title">
+      <h1>Register new patient</h1>
+      <span class="subtitle">Demographics only — you can add admission details on the next page</span>
+    </div>
+
+    <div id="msg"></div>
+
+    <form class="card" id="form">
+      <div class="form-grid">
+        <label class="field">
+          <span>MRN (Medical Record No.) *</span>
+          <input id="mrn" required placeholder="e.g. PH-001" />
+        </label>
+        <label class="field">
+          <span>Full name *</span>
+          <input id="full_name" required />
+        </label>
+        <label class="field">
+          <span>Date of birth</span>
+          <input id="dob" type="date" />
+        </label>
+        <label class="field">
+          <span>Sex</span>
+          <select id="sex">
+            <option value="">Select…</option>
+            <option value="M">Male</option>
+            <option value="F">Female</option>
+            <option value="Other">Other</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Phone</span>
+          <input id="phone" />
+        </label>
+        <label class="field full">
+          <span>Address</span>
+          <input id="address" />
+        </label>
+        <label class="field full">
+          <span>Notes (allergies, history, etc.)</span>
+          <textarea id="notes"></textarea>
+        </label>
+      </div>
+      <div class="actions">
+        <button type="submit" class="btn" id="save">Save patient</button>
+        <a class="btn secondary" href="dashboard.html">Cancel</a>
+      </div>
+    </form>
+  </div>
+
+  <script>
+    let PROFILE = null;
+
+    (async () => {
+      const user = await requireAuth();
+      if (!user) return;
+      PROFILE = await renderTopbar("new-patient");
+      if (!canEditPatient(PROFILE.role)) {
+        document.getElementById("page").innerHTML = `<div class="msg error">Your role (${ROLE_LABELS[PROFILE.role]}) cannot register new patients.</div>`;
+      }
+      document.getElementById("page").style.display = "";
+      await suggestNextMRN();
+    })();
+
+    async function suggestNextMRN() {
+      // Default MRN suggestion: PH-{nextNumber}
+      const { data } = await window.sb
+        .from("patients")
+        .select("mrn")
+        .order("created_at", { ascending: false })
+        .limit(50);
+      let max = 0;
+      (data || []).forEach((p) => {
+        const m = /^PH-(\d+)$/i.exec(p.mrn || "");
+        if (m) max = Math.max(max, parseInt(m[1], 10));
+      });
+      const next = String(max + 1).padStart(3, "0");
+      document.getElementById("mrn").value = `PH-${next}`;
+    }
+
+    document.getElementById("form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const msg = document.getElementById("msg");
+      const btn = document.getElementById("save");
+      clearMsg(msg);
+      btn.disabled = true; btn.textContent = "Saving…";
+      const payload = {
+        mrn: document.getElementById("mrn").value.trim(),
+        full_name: document.getElementById("full_name").value.trim(),
+        dob: document.getElementById("dob").value || null,
+        sex: document.getElementById("sex").value || null,
+        phone: document.getElementById("phone").value.trim() || null,
+        address: document.getElementById("address").value.trim() || null,
+        notes: document.getElementById("notes").value.trim() || null,
+        created_by: PROFILE.id,
+      };
+      const { data, error } = await window.sb
+        .from("patients")
+        .insert(payload)
+        .select()
+        .single();
+      btn.disabled = false; btn.textContent = "Save patient";
+      if (error) {
+        showMsg(msg, "error", error.message || "Save failed.");
+        return;
+      }
+      window.location.href = `patient.html?id=${encodeURIComponent(data.id)}&new=1`;
+    });
+  </script>
+</body>
+</html>

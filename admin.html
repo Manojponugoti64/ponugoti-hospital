@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Staff - Ponugoti Hospital</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</head>
+<body>
+  <div class="container" id="page" style="display:none">
+    <div class="page-title">
+      <h1>Staff</h1>
+      <span class="subtitle">Manage roles for users who can log in</span>
+    </div>
+
+    <div id="msg"></div>
+
+    <div class="card">
+      <h2>How to add a new staff member</h2>
+      <ol style="margin:0;padding-left:20px;color:var(--muted);font-size:14px;line-height:1.7">
+        <li>Open the <a href="https://supabase.com/dashboard/project/guudjjhraialvabauixz/auth/users" target="_blank" rel="noopener">Supabase → Authentication → Users</a> page.</li>
+        <li>Click <b>"Add user" → "Create new user"</b>. Enter the staff member's email and a temporary password. Tick "Auto Confirm User".</li>
+        <li>Return here and refresh — the new user appears in the list below. Set their <b>full name</b> and <b>role</b>, then click Save.</li>
+        <li>Share the email + temporary password with the staff member. They sign in at the login page.</li>
+      </ol>
+    </div>
+
+    <div class="card" style="padding:0;overflow:hidden">
+      <table class="data" id="tbl">
+        <thead>
+          <tr><th>Full name</th><th>Role</th><th>User ID</th><th></th></tr>
+        </thead>
+        <tbody id="rows"><tr><td colspan="4" class="empty">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    let PROFILE = null;
+    let PROFILES = [];
+
+    (async () => {
+      const user = await requireAuth();
+      if (!user) return;
+      PROFILE = await renderTopbar("admin");
+      document.getElementById("page").style.display = "";
+      if (PROFILE.role !== "admin") {
+        document.getElementById("page").innerHTML =
+          `<div class="msg error">Only admins can manage staff. Your current role is "${ROLE_LABELS[PROFILE.role]}".</div>`;
+        return;
+      }
+      await load();
+    })();
+
+    async function load() {
+      const { data, error } = await window.sb
+        .from("profiles")
+        .select("id, full_name, role, created_at")
+        .order("created_at", { ascending: true });
+      if (error) { showMsg(document.getElementById("msg"), "error", error.message); return; }
+      PROFILES = data || [];
+      render();
+    }
+
+    function render() {
+      const tbody = document.getElementById("rows");
+      if (PROFILES.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" class="empty">No staff yet.</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = PROFILES.map((p) => `
+        <tr>
+          <td><input class="name" data-id="${escapeHtml(p.id)}" value="${escapeHtml(p.full_name || "")}" /></td>
+          <td>
+            <select class="role" data-id="${escapeHtml(p.id)}">
+              ${["admin","doctor","nurse","lab","reception"].map(r =>
+                `<option value="${r}" ${r === p.role ? "selected" : ""}>${ROLE_LABELS[r]}</option>`
+              ).join("")}
+            </select>
+          </td>
+          <td style="font-family:monospace;font-size:12px;color:var(--muted)">${escapeHtml(p.id)}</td>
+          <td><button class="btn small" data-save="${escapeHtml(p.id)}">Save</button></td>
+        </tr>
+      `).join("");
+      $$("[data-save]").forEach((b) => b.addEventListener("click", () => saveRow(b.dataset.save)));
+    }
+
+    async function saveRow(id) {
+      const name = document.querySelector(`.name[data-id="${id}"]`).value.trim();
+      const role = document.querySelector(`.role[data-id="${id}"]`).value;
+      const { error } = await window.sb.from("profiles").update({ full_name: name, role }).eq("id", id);
+      const msg = document.getElementById("msg");
+      if (error) showMsg(msg, "error", error.message);
+      else showMsg(msg, "success", "Saved.");
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,551 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Patient - Ponugoti Hospital</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</head>
+<body>
+  <div class="container" id="page" style="display:none">
+    <div id="msg"></div>
+
+    <!-- ===== Patient header ===== -->
+    <div class="page-title">
+      <h1 id="pt-name">…</h1>
+      <span class="subtitle" id="pt-meta"></span>
+      <div style="flex:1"></div>
+      <a class="btn secondary" href="dashboard.html">← Back to list</a>
+    </div>
+
+    <div class="card">
+      <h2>Demographics</h2>
+      <form id="pt-form">
+        <div class="form-grid">
+          <label class="field">
+            <span>MRN</span>
+            <input id="pt-mrn" required />
+          </label>
+          <label class="field">
+            <span>Full name</span>
+            <input id="pt-full_name" required />
+          </label>
+          <label class="field">
+            <span>Date of birth</span>
+            <input id="pt-dob" type="date" />
+          </label>
+          <label class="field">
+            <span>Sex</span>
+            <select id="pt-sex">
+              <option value="">—</option>
+              <option value="M">Male</option>
+              <option value="F">Female</option>
+              <option value="Other">Other</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Phone</span>
+            <input id="pt-phone" />
+          </label>
+          <label class="field full">
+            <span>Address</span>
+            <input id="pt-address" />
+          </label>
+          <label class="field full">
+            <span>Notes</span>
+            <textarea id="pt-notes"></textarea>
+          </label>
+        </div>
+        <div class="actions">
+          <button type="submit" class="btn" id="pt-save">Save changes</button>
+          <button type="button" class="btn danger" id="pt-delete" style="margin-left:auto">Delete patient</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- ===== Admissions list ===== -->
+    <div class="card">
+      <h2>Admissions
+        <button class="btn small" id="new-adm-btn" style="float:right">+ New admission</button>
+      </h2>
+      <table class="data" id="adm-tbl">
+        <thead>
+          <tr>
+            <th>Admitted</th>
+            <th>Discharged</th>
+            <th>Doctor</th>
+            <th>Diagnosis</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="adm-rows"><tr><td colspan="6" class="empty">No admissions yet.</td></tr></tbody>
+      </table>
+    </div>
+
+    <!-- ===== Selected admission detail ===== -->
+    <div id="adm-detail" style="display:none">
+      <div class="card">
+        <h2 id="adm-title">Admission details
+          <a class="btn small secondary" id="print-btn" target="_blank" style="float:right;margin-left:8px">Print discharge summary</a>
+        </h2>
+        <form id="adm-form">
+          <div class="form-grid">
+            <label class="field">
+              <span>Admission date *</span>
+              <input id="adm-admission_date" type="datetime-local" required />
+            </label>
+            <label class="field">
+              <span>Discharge date</span>
+              <input id="adm-discharge_date" type="datetime-local" />
+            </label>
+            <label class="field">
+              <span>Ward</span>
+              <input id="adm-ward" />
+            </label>
+            <label class="field">
+              <span>Bed</span>
+              <input id="adm-bed" />
+            </label>
+            <label class="field full">
+              <span>Admitting doctor</span>
+              <input id="adm-admitting_doctor" />
+            </label>
+            <label class="field full">
+              <span>Chief complaints</span>
+              <textarea id="adm-chief_complaints"></textarea>
+            </label>
+            <label class="field full">
+              <span>Provisional diagnosis</span>
+              <textarea id="adm-provisional_diagnosis"></textarea>
+            </label>
+            <label class="field full">
+              <span>Final diagnosis</span>
+              <textarea id="adm-final_diagnosis"></textarea>
+            </label>
+            <label class="field full">
+              <span>Treatment given</span>
+              <textarea id="adm-treatment_given"></textarea>
+            </label>
+            <label class="field full">
+              <span>Medications</span>
+              <textarea id="adm-medications" placeholder="One per line: Drug — dose, frequency, duration"></textarea>
+            </label>
+            <label class="field full">
+              <span>Condition at discharge</span>
+              <textarea id="adm-condition_at_discharge"></textarea>
+            </label>
+            <label class="field full">
+              <span>Follow-up instructions</span>
+              <textarea id="adm-follow_up"></textarea>
+            </label>
+            <label class="field full">
+              <span>Discharge summary (free text)</span>
+              <textarea id="adm-discharge_summary" rows="6"></textarea>
+            </label>
+          </div>
+          <div class="actions">
+            <button type="submit" class="btn" id="adm-save">Save admission</button>
+            <button type="button" class="btn secondary" id="adm-close">Close</button>
+            <button type="button" class="btn danger" id="adm-delete" style="margin-left:auto">Delete admission</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- ===== Investigations ===== -->
+      <div class="card">
+        <h2>Investigations
+          <button class="btn small" id="inv-add" style="float:right">+ Add investigation</button>
+        </h2>
+        <table class="data" id="inv-tbl">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Test</th>
+              <th>Value</th>
+              <th>Units</th>
+              <th>Normal Range</th>
+              <th>Comments</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="inv-rows"><tr><td colspan="7" class="empty">No investigations yet.</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal for adding investigation -->
+  <div id="inv-modal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.4);z-index:20;align-items:center;justify-content:center">
+    <form class="card" id="inv-form" style="width:100%;max-width:500px;margin:0;background:#fff">
+      <h2 id="inv-form-title">Add investigation</h2>
+      <div class="form-grid">
+        <label class="field full">
+          <span>Test name *</span>
+          <input id="inv-test_name" required placeholder="e.g. Hemoglobin, CBC, X-Ray Chest" />
+        </label>
+        <label class="field">
+          <span>Value</span>
+          <input id="inv-test_value" placeholder="e.g. 12.4" />
+        </label>
+        <label class="field">
+          <span>Units</span>
+          <input id="inv-units" placeholder="e.g. g/dL" />
+        </label>
+        <label class="field full">
+          <span>Normal range</span>
+          <input id="inv-normal_range" placeholder="e.g. 12-17 g/dL" />
+        </label>
+        <label class="field full">
+          <span>Performed at</span>
+          <input id="inv-performed_at" type="datetime-local" />
+        </label>
+        <label class="field full">
+          <span>Comments</span>
+          <textarea id="inv-comments"></textarea>
+        </label>
+      </div>
+      <div class="actions">
+        <button type="submit" class="btn" id="inv-save">Save</button>
+        <button type="button" class="btn secondary" id="inv-cancel">Cancel</button>
+      </div>
+    </form>
+  </div>
+
+  <script>
+    let PROFILE = null;
+    let PATIENT = null;
+    let ADMISSIONS = [];
+    let CURRENT_ADM = null;
+    let INVESTIGATIONS = [];
+    let EDITING_INV = null;
+
+    function getPatientId() {
+      const params = new URLSearchParams(window.location.search);
+      return params.get("id");
+    }
+    function isNewParam() {
+      return new URLSearchParams(window.location.search).get("new") === "1";
+    }
+
+    (async () => {
+      const user = await requireAuth();
+      if (!user) return;
+      PROFILE = await renderTopbar("");
+      document.getElementById("page").style.display = "";
+
+      const id = getPatientId();
+      if (!id) { showMsg(document.getElementById("msg"), "error", "Missing patient id."); return; }
+      await loadPatient(id);
+      await loadAdmissions(id);
+      if (isNewParam()) {
+        showMsg(document.getElementById("msg"), "success", "Patient registered. You can now add an admission below.");
+      }
+      bindHandlers();
+      applyRoleGating();
+    })();
+
+    function applyRoleGating() {
+      if (!canEditPatient(PROFILE.role)) {
+        $$("#pt-form input, #pt-form textarea, #pt-form select").forEach(el => el.disabled = true);
+        document.getElementById("pt-save").style.display = "none";
+      }
+      if (!canDeleteAdmin(PROFILE.role)) {
+        document.getElementById("pt-delete").style.display = "none";
+        const ad = document.getElementById("adm-delete");
+        if (ad) ad.style.display = "none";
+      }
+      if (!canEditAdmission(PROFILE.role)) {
+        document.getElementById("new-adm-btn").style.display = "none";
+      }
+      if (!canEditInvestigation(PROFILE.role)) {
+        document.getElementById("inv-add").style.display = "none";
+      }
+    }
+
+    async function loadPatient(id) {
+      const { data, error } = await window.sb.from("patients").select("*").eq("id", id).maybeSingle();
+      if (error || !data) {
+        showMsg(document.getElementById("msg"), "error", "Patient not found.");
+        return;
+      }
+      PATIENT = data;
+      document.getElementById("pt-name").textContent = data.full_name;
+      const meta = [];
+      if (data.mrn) meta.push(`MRN ${data.mrn}`);
+      if (data.dob) meta.push(`${ageFromDob(data.dob)}y`);
+      if (data.sex) meta.push(data.sex);
+      document.getElementById("pt-meta").textContent = meta.join(" · ");
+      document.getElementById("pt-mrn").value = data.mrn || "";
+      document.getElementById("pt-full_name").value = data.full_name || "";
+      document.getElementById("pt-dob").value = data.dob || "";
+      document.getElementById("pt-sex").value = data.sex || "";
+      document.getElementById("pt-phone").value = data.phone || "";
+      document.getElementById("pt-address").value = data.address || "";
+      document.getElementById("pt-notes").value = data.notes || "";
+    }
+
+    async function loadAdmissions(patientId) {
+      const { data, error } = await window.sb
+        .from("admissions")
+        .select("*")
+        .eq("patient_id", patientId)
+        .order("admission_date", { ascending: false });
+      if (error) { showMsg(document.getElementById("msg"), "error", error.message); return; }
+      ADMISSIONS = data || [];
+      renderAdmList();
+    }
+
+    function renderAdmList() {
+      const tbody = document.getElementById("adm-rows");
+      if (ADMISSIONS.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="empty">No admissions yet.</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = ADMISSIONS.map((a) => {
+        const status = a.discharge_date
+          ? `<span class="badge discharged">Discharged</span>`
+          : `<span class="badge admitted">Admitted</span>`;
+        const diag = a.final_diagnosis || a.provisional_diagnosis || "";
+        return `
+          <tr class="clickable" data-id="${escapeHtml(a.id)}">
+            <td>${fmtDate(a.admission_date)}</td>
+            <td>${a.discharge_date ? fmtDate(a.discharge_date) : "—"}</td>
+            <td>${escapeHtml(a.admitting_doctor || "")}</td>
+            <td>${escapeHtml((diag || "").slice(0, 60))}</td>
+            <td>${status}</td>
+            <td><button class="btn small secondary" data-id="${escapeHtml(a.id)}">Open</button></td>
+          </tr>`;
+      }).join("");
+      $$("#adm-rows tr.clickable, #adm-rows button").forEach((el) => {
+        el.addEventListener("click", (e) => {
+          e.stopPropagation();
+          openAdmission(el.dataset.id);
+        });
+      });
+    }
+
+    async function openAdmission(id) {
+      const a = ADMISSIONS.find((x) => x.id === id);
+      if (!a) return;
+      CURRENT_ADM = a;
+      const f = (id) => document.getElementById(id);
+      const toLocal = (iso) => {
+        if (!iso) return "";
+        const d = new Date(iso);
+        const pad = (n) => String(n).padStart(2, "0");
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      };
+      f("adm-admission_date").value      = toLocal(a.admission_date);
+      f("adm-discharge_date").value      = toLocal(a.discharge_date);
+      f("adm-ward").value                = a.ward || "";
+      f("adm-bed").value                 = a.bed || "";
+      f("adm-admitting_doctor").value    = a.admitting_doctor || "";
+      f("adm-chief_complaints").value    = a.chief_complaints || "";
+      f("adm-provisional_diagnosis").value = a.provisional_diagnosis || "";
+      f("adm-final_diagnosis").value     = a.final_diagnosis || "";
+      f("adm-treatment_given").value     = a.treatment_given || "";
+      f("adm-medications").value         = a.medications || "";
+      f("adm-condition_at_discharge").value = a.condition_at_discharge || "";
+      f("adm-follow_up").value           = a.follow_up || "";
+      f("adm-discharge_summary").value   = a.discharge_summary || "";
+      document.getElementById("adm-title").firstChild.textContent =
+        `Admission — ${fmtDate(a.admission_date)} `;
+      document.getElementById("print-btn").href = `print-discharge.html?adm=${encodeURIComponent(a.id)}`;
+      document.getElementById("adm-detail").style.display = "";
+      await loadInvestigations(a.id);
+      document.getElementById("adm-detail").scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    function closeAdmission() {
+      CURRENT_ADM = null;
+      document.getElementById("adm-detail").style.display = "none";
+    }
+
+    async function loadInvestigations(admissionId) {
+      const { data, error } = await window.sb
+        .from("investigations")
+        .select("*")
+        .eq("admission_id", admissionId)
+        .order("performed_at", { ascending: false });
+      if (error) { showMsg(document.getElementById("msg"), "error", error.message); return; }
+      INVESTIGATIONS = data || [];
+      const tbody = document.getElementById("inv-rows");
+      if (INVESTIGATIONS.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" class="empty">No investigations yet.</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = INVESTIGATIONS.map((i) => `
+        <tr>
+          <td>${fmtDateTime(i.performed_at)}</td>
+          <td><strong>${escapeHtml(i.test_name)}</strong></td>
+          <td>${escapeHtml(i.test_value || "")}</td>
+          <td>${escapeHtml(i.units || "")}</td>
+          <td>${escapeHtml(i.normal_range || "")}</td>
+          <td>${escapeHtml(i.comments || "")}</td>
+          <td>
+            <button class="btn small secondary" data-edit="${escapeHtml(i.id)}">Edit</button>
+            <button class="btn small danger" data-del="${escapeHtml(i.id)}">Del</button>
+          </td>
+        </tr>
+      `).join("");
+      $$("#inv-rows button[data-edit]").forEach((b) => b.addEventListener("click", () => openInvForm(b.dataset.edit)));
+      $$("#inv-rows button[data-del]").forEach((b) => b.addEventListener("click", () => deleteInv(b.dataset.del)));
+      if (!canEditInvestigation(PROFILE.role)) {
+        $$("#inv-rows button").forEach((b) => b.remove());
+      }
+    }
+
+    function openInvForm(invId) {
+      EDITING_INV = invId ? INVESTIGATIONS.find((x) => x.id === invId) : null;
+      const f = (id) => document.getElementById(id);
+      const toLocal = (iso) => {
+        if (!iso) return "";
+        const d = new Date(iso);
+        const pad = (n) => String(n).padStart(2, "0");
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      };
+      f("inv-form-title").textContent = EDITING_INV ? "Edit investigation" : "Add investigation";
+      f("inv-test_name").value     = EDITING_INV ? EDITING_INV.test_name : "";
+      f("inv-test_value").value    = EDITING_INV ? (EDITING_INV.test_value || "") : "";
+      f("inv-units").value         = EDITING_INV ? (EDITING_INV.units || "") : "";
+      f("inv-normal_range").value  = EDITING_INV ? (EDITING_INV.normal_range || "") : "";
+      f("inv-performed_at").value  = EDITING_INV ? toLocal(EDITING_INV.performed_at) : toLocal(new Date().toISOString());
+      f("inv-comments").value      = EDITING_INV ? (EDITING_INV.comments || "") : "";
+      document.getElementById("inv-modal").style.display = "flex";
+    }
+
+    function closeInvForm() {
+      document.getElementById("inv-modal").style.display = "none";
+      EDITING_INV = null;
+    }
+
+    async function deleteInv(id) {
+      if (!confirm("Delete this investigation?")) return;
+      const { error } = await window.sb.from("investigations").delete().eq("id", id);
+      if (error) { showMsg(document.getElementById("msg"), "error", error.message); return; }
+      if (CURRENT_ADM) await loadInvestigations(CURRENT_ADM.id);
+    }
+
+    function bindHandlers() {
+      // Patient save
+      document.getElementById("pt-form").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const msg = document.getElementById("msg");
+        clearMsg(msg);
+        const payload = {
+          mrn: document.getElementById("pt-mrn").value.trim(),
+          full_name: document.getElementById("pt-full_name").value.trim(),
+          dob: document.getElementById("pt-dob").value || null,
+          sex: document.getElementById("pt-sex").value || null,
+          phone: document.getElementById("pt-phone").value.trim() || null,
+          address: document.getElementById("pt-address").value.trim() || null,
+          notes: document.getElementById("pt-notes").value.trim() || null,
+        };
+        const { error } = await window.sb.from("patients").update(payload).eq("id", PATIENT.id);
+        if (error) showMsg(msg, "error", error.message);
+        else { showMsg(msg, "success", "Patient saved."); await loadPatient(PATIENT.id); }
+      });
+
+      // Patient delete
+      document.getElementById("pt-delete").addEventListener("click", async () => {
+        if (!confirm("Delete this patient and ALL their admissions and investigations? This cannot be undone.")) return;
+        const { error } = await window.sb.from("patients").delete().eq("id", PATIENT.id);
+        if (error) { showMsg(document.getElementById("msg"), "error", error.message); return; }
+        window.location.href = "dashboard.html";
+      });
+
+      // New admission
+      document.getElementById("new-adm-btn").addEventListener("click", async () => {
+        const { data, error } = await window.sb
+          .from("admissions")
+          .insert({
+            patient_id: PATIENT.id,
+            admission_date: new Date().toISOString(),
+            admitting_doctor: PROFILE.role === "doctor" ? PROFILE.full_name : "",
+            created_by: PROFILE.id,
+          })
+          .select()
+          .single();
+        if (error) { showMsg(document.getElementById("msg"), "error", error.message); return; }
+        await loadAdmissions(PATIENT.id);
+        openAdmission(data.id);
+      });
+
+      // Admission save
+      document.getElementById("adm-form").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        if (!CURRENT_ADM) return;
+        const msg = document.getElementById("msg");
+        clearMsg(msg);
+        const fromLocal = (v) => v ? new Date(v).toISOString() : null;
+        const payload = {
+          admission_date: fromLocal(document.getElementById("adm-admission_date").value),
+          discharge_date: fromLocal(document.getElementById("adm-discharge_date").value),
+          ward: document.getElementById("adm-ward").value.trim() || null,
+          bed: document.getElementById("adm-bed").value.trim() || null,
+          admitting_doctor: document.getElementById("adm-admitting_doctor").value.trim() || null,
+          chief_complaints: document.getElementById("adm-chief_complaints").value.trim() || null,
+          provisional_diagnosis: document.getElementById("adm-provisional_diagnosis").value.trim() || null,
+          final_diagnosis: document.getElementById("adm-final_diagnosis").value.trim() || null,
+          treatment_given: document.getElementById("adm-treatment_given").value.trim() || null,
+          medications: document.getElementById("adm-medications").value.trim() || null,
+          condition_at_discharge: document.getElementById("adm-condition_at_discharge").value.trim() || null,
+          follow_up: document.getElementById("adm-follow_up").value.trim() || null,
+          discharge_summary: document.getElementById("adm-discharge_summary").value.trim() || null,
+        };
+        const { error } = await window.sb.from("admissions").update(payload).eq("id", CURRENT_ADM.id);
+        if (error) { showMsg(msg, "error", error.message); return; }
+        showMsg(msg, "success", "Admission saved.");
+        await loadAdmissions(PATIENT.id);
+        openAdmission(CURRENT_ADM.id);
+      });
+
+      // Admission close
+      document.getElementById("adm-close").addEventListener("click", closeAdmission);
+
+      // Admission delete
+      document.getElementById("adm-delete").addEventListener("click", async () => {
+        if (!CURRENT_ADM) return;
+        if (!confirm("Delete this admission and all its investigations?")) return;
+        const { error } = await window.sb.from("admissions").delete().eq("id", CURRENT_ADM.id);
+        if (error) { showMsg(document.getElementById("msg"), "error", error.message); return; }
+        closeAdmission();
+        await loadAdmissions(PATIENT.id);
+      });
+
+      // Investigation modal
+      document.getElementById("inv-add").addEventListener("click", () => openInvForm(null));
+      document.getElementById("inv-cancel").addEventListener("click", closeInvForm);
+      document.getElementById("inv-form").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        if (!CURRENT_ADM) return;
+        const payload = {
+          admission_id: CURRENT_ADM.id,
+          test_name: document.getElementById("inv-test_name").value.trim(),
+          test_value: document.getElementById("inv-test_value").value.trim() || null,
+          units: document.getElementById("inv-units").value.trim() || null,
+          normal_range: document.getElementById("inv-normal_range").value.trim() || null,
+          performed_at: document.getElementById("inv-performed_at").value
+            ? new Date(document.getElementById("inv-performed_at").value).toISOString()
+            : new Date().toISOString(),
+          comments: document.getElementById("inv-comments").value.trim() || null,
+          performed_by: PROFILE.id,
+        };
+        let res;
+        if (EDITING_INV) {
+          res = await window.sb.from("investigations").update(payload).eq("id", EDITING_INV.id);
+        } else {
+          res = await window.sb.from("investigations").insert(payload);
+        }
+        if (res.error) { showMsg(document.getElementById("msg"), "error", res.error.message); return; }
+        closeInvForm();
+        await loadInvestigations(CURRENT_ADM.id);
+      });
+    }
+  </script>
+</body>
+</html>

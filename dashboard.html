@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Patients - Ponugoti Hospital</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</head>
+<body>
+  <div class="container" id="page" style="display:none">
+    <div class="page-title">
+      <h1>Patients</h1>
+      <span class="subtitle" id="count"></span>
+      <div style="flex:1"></div>
+      <a class="btn" href="new-patient.html" id="new-pt-btn">+ New Patient</a>
+      <button class="btn secondary" id="backup-btn" title="Download a JSON backup of all records">Download backup</button>
+    </div>
+
+    <div id="msg"></div>
+
+    <div class="searchbar">
+      <input id="q" type="search" placeholder="Search by name, MRN, or phone..." autofocus />
+    </div>
+
+    <div class="card" style="padding:0;overflow:hidden">
+      <table class="data" id="tbl">
+        <thead>
+          <tr>
+            <th>MRN</th>
+            <th>Name</th>
+            <th>Age / Sex</th>
+            <th>Phone</th>
+            <th>Latest Admission</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="rows"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    let ALL_PATIENTS = [];
+    let LATEST_ADMISSIONS = {}; // patient_id -> latest admission row
+
+    (async () => {
+      const user = await requireAuth();
+      if (!user) return;
+      const profile = await renderTopbar("dashboard");
+      document.getElementById("page").style.display = "";
+      if (!canEditPatient(profile.role)) {
+        document.getElementById("new-pt-btn").style.display = "none";
+      }
+      document.getElementById("backup-btn").addEventListener("click", downloadBackup);
+      document.getElementById("q").addEventListener("input", render);
+      await loadAll();
+    })();
+
+    async function loadAll() {
+      const msg = document.getElementById("msg");
+      const { data: patients, error: pErr } = await window.sb
+        .from("patients")
+        .select("id, mrn, full_name, dob, sex, phone, created_at")
+        .order("created_at", { ascending: false });
+      if (pErr) { showMsg(msg, "error", pErr.message); return; }
+      ALL_PATIENTS = patients || [];
+
+      const { data: adms } = await window.sb
+        .from("admissions")
+        .select("id, patient_id, admission_date, discharge_date")
+        .order("admission_date", { ascending: false });
+      LATEST_ADMISSIONS = {};
+      (adms || []).forEach((a) => {
+        if (!LATEST_ADMISSIONS[a.patient_id]) LATEST_ADMISSIONS[a.patient_id] = a;
+      });
+
+      document.getElementById("count").textContent = `(${ALL_PATIENTS.length})`;
+      render();
+    }
+
+    function render() {
+      const q = document.getElementById("q").value.trim().toLowerCase();
+      const rows = document.getElementById("rows");
+      const filtered = ALL_PATIENTS.filter((p) => {
+        if (!q) return true;
+        return (
+          (p.full_name || "").toLowerCase().includes(q) ||
+          (p.mrn || "").toLowerCase().includes(q) ||
+          (p.phone || "").toLowerCase().includes(q)
+        );
+      });
+      if (filtered.length === 0) {
+        rows.innerHTML = `<tr><td colspan="6" class="empty">No patients found.</td></tr>`;
+        return;
+      }
+      rows.innerHTML = filtered.map((p) => {
+        const adm = LATEST_ADMISSIONS[p.id];
+        const status = !adm
+          ? `<span class="muted">—</span>`
+          : adm.discharge_date
+            ? `<span class="badge discharged">Discharged ${fmtDate(adm.discharge_date)}</span>`
+            : `<span class="badge admitted">Admitted</span>`;
+        const admDate = adm ? fmtDate(adm.admission_date) : "—";
+        const age = p.dob ? `${ageFromDob(p.dob)}y` : "";
+        return `
+          <tr class="clickable" data-id="${escapeHtml(p.id)}">
+            <td><strong>${escapeHtml(p.mrn)}</strong></td>
+            <td>${escapeHtml(p.full_name)}</td>
+            <td>${age}${age && p.sex ? " / " : ""}${escapeHtml(p.sex || "")}</td>
+            <td>${escapeHtml(p.phone || "")}</td>
+            <td>${admDate}</td>
+            <td>${status}</td>
+          </tr>`;
+      }).join("");
+      $$("#rows tr.clickable").forEach((tr) => {
+        tr.addEventListener("click", () => {
+          window.location.href = `patient.html?id=${encodeURIComponent(tr.dataset.id)}`;
+        });
+      });
+    }
+
+    async function downloadBackup() {
+      const btn = document.getElementById("backup-btn");
+      btn.disabled = true; btn.textContent = "Exporting…";
+      try {
+        const [p, a, i, pr] = await Promise.all([
+          window.sb.from("patients").select("*"),
+          window.sb.from("admissions").select("*"),
+          window.sb.from("investigations").select("*"),
+          window.sb.from("profiles").select("id, full_name, role"),
+        ]);
+        const blob = new Blob([JSON.stringify({
+          exported_at: new Date().toISOString(),
+          patients: p.data || [],
+          admissions: a.data || [],
+          investigations: i.data || [],
+          profiles: pr.data || [],
+        }, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a2 = document.createElement("a");
+        const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+        a2.href = url;
+        a2.download = `ponugoti-hospital-backup-${stamp}.json`;
+        document.body.appendChild(a2); a2.click(); a2.remove();
+        URL.revokeObjectURL(url);
+      } catch (e) {
+        showMsg(document.getElementById("msg"), "error", e.message || "Backup failed.");
+      }
+      btn.disabled = false; btn.textContent = "Download backup";
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Discharge Summary - Ponugoti Hospital</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</head>
+<body>
+  <div class="no-print" style="background:#f0f4f8;padding:12px 24px;display:flex;gap:10px;align-items:center;border-bottom:1px solid var(--border)">
+    <strong style="margin-right:auto">Discharge Summary — preview</strong>
+    <button class="btn" onclick="window.print()">Print / Save as PDF</button>
+    <button class="btn secondary" onclick="window.close()">Close</button>
+  </div>
+
+  <div id="sheet" class="print-sheet">Loading…</div>
+
+  <script>
+    (async () => {
+      const user = await requireAuth();
+      if (!user) return;
+      const cfg = window.PONUGOTI_CONFIG;
+      const admId = new URLSearchParams(window.location.search).get("adm");
+      if (!admId) { document.getElementById("sheet").textContent = "Missing admission id."; return; }
+
+      const { data: adm } = await window.sb.from("admissions").select("*").eq("id", admId).maybeSingle();
+      if (!adm) { document.getElementById("sheet").textContent = "Admission not found."; return; }
+
+      const { data: pt } = await window.sb.from("patients").select("*").eq("id", adm.patient_id).maybeSingle();
+      const { data: inv } = await window.sb
+        .from("investigations")
+        .select("*")
+        .eq("admission_id", admId)
+        .order("performed_at", { ascending: true });
+
+      const age = pt && pt.dob ? `${ageFromDob(pt.dob)}y` : "";
+      const days = adm.discharge_date
+        ? Math.max(1, Math.round((new Date(adm.discharge_date) - new Date(adm.admission_date)) / (1000*60*60*24)))
+        : null;
+
+      const section = (title, body) => body
+        ? `<section><h3>${escapeHtml(title)}</h3><pre>${escapeHtml(body)}</pre></section>`
+        : "";
+
+      const invTable = (inv && inv.length)
+        ? `<section><h3>Investigations</h3>
+            <table>
+              <thead><tr><th>Date</th><th>Test</th><th>Value</th><th>Units</th><th>Normal Range</th><th>Comments</th></tr></thead>
+              <tbody>
+                ${inv.map(i => `
+                  <tr>
+                    <td>${fmtDate(i.performed_at)}</td>
+                    <td>${escapeHtml(i.test_name)}</td>
+                    <td>${escapeHtml(i.test_value || "")}</td>
+                    <td>${escapeHtml(i.units || "")}</td>
+                    <td>${escapeHtml(i.normal_range || "")}</td>
+                    <td>${escapeHtml(i.comments || "")}</td>
+                  </tr>`).join("")}
+              </tbody>
+            </table>
+           </section>`
+        : "";
+
+      document.getElementById("sheet").innerHTML = `
+        <div class="hospital-head">
+          <h1>${escapeHtml(cfg.HOSPITAL_NAME)}</h1>
+          <p>DISCHARGE SUMMARY</p>
+        </div>
+
+        <section>
+          <div class="pt-grid">
+            <div><b>Name:</b> ${escapeHtml(pt.full_name)}</div>
+            <div><b>MRN:</b> ${escapeHtml(pt.mrn)}</div>
+            <div><b>Age / Sex:</b> ${age}${age && pt.sex ? " / " : ""}${escapeHtml(pt.sex || "")}</div>
+            <div><b>Phone:</b> ${escapeHtml(pt.phone || "—")}</div>
+            <div><b>Ward / Bed:</b> ${escapeHtml(adm.ward || "—")}${adm.bed ? " / " + escapeHtml(adm.bed) : ""}</div>
+            <div><b>Doctor:</b> ${escapeHtml(adm.admitting_doctor || "—")}</div>
+            <div><b>Admitted:</b> ${fmtDate(adm.admission_date)}</div>
+            <div><b>Discharged:</b> ${adm.discharge_date ? fmtDate(adm.discharge_date) : "—"}</div>
+            <div><b>LOS:</b> ${days ? days + " day(s)" : "—"}</div>
+          </div>
+          ${pt.address ? `<p style="font-size:13px;margin-top:8px"><b style="color:var(--muted);font-weight:500">Address:</b> ${escapeHtml(pt.address)}</p>` : ""}
+        </section>
+
+        ${section("Chief Complaints", adm.chief_complaints)}
+        ${section("Provisional Diagnosis", adm.provisional_diagnosis)}
+        ${section("Final Diagnosis", adm.final_diagnosis)}
+        ${section("Treatment Given", adm.treatment_given)}
+        ${invTable}
+        ${section("Medications on Discharge", adm.medications)}
+        ${section("Condition at Discharge", adm.condition_at_discharge)}
+        ${section("Follow-up Instructions", adm.follow_up)}
+        ${section("Clinical Summary", adm.discharge_summary)}
+
+        <div class="signature">
+          <div>
+            <div style="height:40px"></div>
+            Patient / Attendant signature
+          </div>
+          <div style="text-align:right">
+            <div style="height:40px"></div>
+            ${escapeHtml(adm.admitting_doctor || "Attending Physician")}
+          </div>
+        </div>
+      `;
+    })();
+  </script>
+</body>
+</html>
