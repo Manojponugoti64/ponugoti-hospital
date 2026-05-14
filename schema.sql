@@ -155,12 +155,22 @@ create policy "read admissions for staff"
 create policy "read investigations for staff"
   on public.investigations for select to authenticated using (true);
 
--- Profiles: a user can update their own full_name; only admins change roles.
+-- Profiles:
+--   * Admins can update any profile, including role.
+--   * Everyone else can update only their own row, and CANNOT change their own role.
+-- The WITH CHECK clause re-fetches the existing role and rejects the write
+-- if a non-admin tries to change it, blocking client-side privilege escalation.
 drop policy if exists "update own profile" on public.profiles;
 create policy "update own profile"
   on public.profiles for update to authenticated
-  using (id = auth.uid() or current_role_name() = 'admin')
-  with check (id = auth.uid() or current_role_name() = 'admin');
+  using  (id = auth.uid() or current_role_name() = 'admin')
+  with check (
+    current_role_name() = 'admin'
+    or (
+      id = auth.uid()
+      and role = (select p.role from public.profiles p where p.id = auth.uid())
+    )
+  );
 
 -- Patients: reception/doctor/nurse/admin can insert + update; admin can delete.
 drop policy if exists "insert patients" on public.patients;

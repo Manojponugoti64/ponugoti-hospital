@@ -70,6 +70,8 @@
       PROFILE = await renderTopbar("new-patient");
       if (!canEditPatient(PROFILE.role)) {
         document.getElementById("page").innerHTML = `<div class="msg error">Your role (${ROLE_LABELS[PROFILE.role]}) cannot register new patients.</div>`;
+        document.getElementById("page").style.display = "";
+        return;
       }
       document.getElementById("page").style.display = "";
       await suggestNextMRN();

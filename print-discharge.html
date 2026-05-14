@@ -30,6 +30,7 @@
       if (!adm) { document.getElementById("sheet").textContent = "Admission not found."; return; }
 
       const { data: pt } = await window.sb.from("patients").select("*").eq("id", adm.patient_id).maybeSingle();
+      if (!pt) { document.getElementById("sheet").textContent = "Patient record not found for this admission."; return; }
       const { data: inv } = await window.sb
         .from("investigations")
         .select("*")
