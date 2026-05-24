@@ -226,6 +226,112 @@ create policy "delete investigations"
   on public.investigations for delete to authenticated
   using (current_role_name() in ('admin','lab'));
 
+-- ---------- 10. Billing Service Catalog ----------
+create table if not exists public.billing_services (
+  id uuid primary key default gen_random_uuid(),
+  item_name text not null unique,
+  category text not null, -- 'Consultation', 'Ward/Bed', 'Lab Test', 'Procedure', 'Pharmacy', 'Other'
+  default_price numeric(10, 2) not null default 0.00,
+  created_at timestamptz not null default now()
+);
+
+-- Seed Standard Services Catalog
+insert into public.billing_services (item_name, category, default_price) values
+  ('General OPD Consultation', 'Consultation', 300.00),
+  ('Specialist Doctor Consultation', 'Consultation', 600.00),
+  ('General Ward Bed (Per Day)', 'Ward/Bed', 1000.00),
+  ('Semi-Private Room (Per Day)', 'Ward/Bed', 2000.00),
+  ('Private Room (Per Day)', 'Ward/Bed', 3500.00),
+  ('ICU Bed (Per Day)', 'Ward/Bed', 7000.00),
+  ('Routine Laboratory Panel', 'Lab Test', 250.00),
+  ('Specialized Laboratory Panel', 'Lab Test', 800.00),
+  ('X-Ray Chest / Imaging', 'Lab Test', 500.00),
+  ('Ultrasound Scan (USG)', 'Lab Test', 1500.00),
+  ('Nursing Charges (Per Day)', 'Other', 300.00),
+  ('RMO Daily Visit Charges', 'Other', 300.00),
+  ('Admission & Registration Fee', 'Other', 200.00)
+on conflict (item_name) do nothing;
+
+-- ---------- 11. Unified Invoices / Bills ----------
+create table if not exists public.bills (
+  id uuid primary key default gen_random_uuid(),
+  patient_id uuid not null references public.patients(id) on delete cascade,
+  admission_id uuid references public.admissions(id) on delete set null, -- Null for Outpatient (OP)
+  bill_type text not null check (bill_type in ('OP', 'IP')),
+  bill_number text unique not null,
+  billing_date timestamptz not null default now(),
+  payment_status text not null default 'Unpaid' check (payment_status in ('Unpaid', 'Partially Paid', 'Paid', 'Refunded')),
+  payment_mode text not null default 'Cash' check (payment_mode in ('Cash', 'Card', 'UPI', 'Insurance', 'State Scheme', 'Mixed')),
+  
+  -- Insurance Details
+  insurance_type text not null default 'Self-Pay' check (insurance_type in ('Self-Pay', 'Private Insurance', 'State Scheme')),
+  insurance_provider text, -- e.g., 'Star Health', 'HDFC Ergo', 'Dr. YSR Aarogyasri', 'Ayushman Bharat (PM-JAY)'
+  insurance_policy_number text,
+  insurance_preauth_id text,
+  insurance_approval_status text not null default 'Pending' check (insurance_approval_status in ('Pending', 'Approved', 'Rejected')),
+  
+  -- Calculations
+  subtotal numeric(10, 2) not null default 0.00,
+  discount_amount numeric(10, 2) not null default 0.00,
+  tax_amount numeric(10, 2) not null default 0.00,
+  total_amount numeric(10, 2) not null default 0.00,
+  amount_paid numeric(10, 2) not null default 0.00,
+  insurance_approved_amount numeric(10, 2) not null default 0.00,
+  patient_copay_amount numeric(10, 2) not null default 0.00,
+  
+  notes text,
+  created_at timestamptz not null default now(),
+  created_by uuid references public.profiles(id),
+  updated_at timestamptz not null default now()
+);
+
+-- Index for speedy searching
+create index if not exists bills_patient_idx on public.bills(patient_id);
+create index if not exists bills_admission_idx on public.bills(admission_id);
+create index if not exists bills_number_idx on public.bills(bill_number);
+
+-- ---------- 12. Invoice Line Items ----------
+create table if not exists public.bill_items (
+  id uuid primary key default gen_random_uuid(),
+  bill_id uuid not null references public.bills(id) on delete cascade,
+  item_name text not null,
+  category text not null,
+  quantity numeric(10, 2) not null default 1.00,
+  unit_price numeric(10, 2) not null default 0.00,
+  total_price numeric(10, 2) not null default 0.00, -- quantity * unit_price
+  created_at timestamptz not null default now()
+);
+
+create index if not exists bill_items_bill_idx on public.bill_items(bill_id);
+
+-- ---------- 13. Enable RLS ----------
+alter table public.billing_services enable row level security;
+alter table public.bills            enable row level security;
+alter table public.bill_items       enable row level security;
+
+-- ---------- 14. Policies ----------
+drop policy if exists "read billing_services for staff" on public.billing_services;
+drop policy if exists "write billing_services for admin" on public.billing_services;
+create policy "read billing_services for staff" on public.billing_services for select to authenticated using (true);
+create policy "write billing_services for admin" on public.billing_services for all to authenticated using (current_role_name() = 'admin');
+
+drop policy if exists "read bills for staff" on public.bills;
+drop policy if exists "write bills for reception and admin" on public.bills;
+create policy "read bills for staff" on public.bills for select to authenticated using (true);
+create policy "write bills for reception and admin" on public.bills for all to authenticated 
+  using (current_role_name() in ('admin', 'reception'));
+
+drop policy if exists "read bill_items for staff" on public.bill_items;
+drop policy if exists "write bill_items for reception and admin" on public.bill_items;
+create policy "read bill_items for staff" on public.bill_items for select to authenticated using (true);
+create policy "write bill_items for reception and admin" on public.bill_items for all to authenticated 
+  using (current_role_name() in ('admin', 'reception'));
+
+-- ---------- 15. Auto-update updated_at for bills ----------
+drop trigger if exists trg_bills_touch on public.bills;
+create trigger trg_bills_touch before update on public.bills
+for each row execute function public.touch_updated_at();
+
 -- =====================================================================
 -- DONE. Next steps in Supabase Dashboard:
 --   1. Authentication → Users → "Add user" (one per staff member)
@@ -236,3 +342,4 @@ create policy "delete investigations"
 --         where id = (select id from auth.users where email = 'you@example.com');
 --      Roles: 'admin' | 'doctor' | 'nurse' | 'lab' | 'reception'
 -- =====================================================================
+

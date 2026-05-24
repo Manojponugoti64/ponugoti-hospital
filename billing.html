@@ -1,0 +1,451 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Billing & Invoices - Ponugoti Hospital</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+  <style>
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .kpi-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      box-shadow: var(--shadow);
+      display: flex;
+      flex-direction: column;
+    }
+    .kpi-card .kpi-val {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--primary-dark);
+      margin: 8px 0 4px;
+    }
+    .kpi-card .kpi-label {
+      font-size: 13px;
+      color: var(--muted);
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+    }
+    .kpi-card .kpi-desc {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 8px;
+    }
+    .tab {
+      background: none;
+      border: none;
+      font: inherit;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--muted);
+      padding: 6px 12px;
+      cursor: pointer;
+      border-radius: 6px;
+      transition: background .15s, color .15s;
+    }
+    .tab.active, .tab:hover {
+      background: #e0e7ff;
+      color: #3730a3;
+    }
+    .modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, .4);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-content {
+      background: #fff;
+      width: 100%;
+      max-width: 480px;
+      margin: 24px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container" id="page" style="display:none">
+    <div class="page-title">
+      <h1>Billing & Invoices</h1>
+      <span class="subtitle" id="bill-count">…</span>
+      <div style="flex:1"></div>
+      <button class="btn" id="new-op-btn">+ Create OP Bill</button>
+      <button class="btn secondary" id="new-ip-btn" style="margin-left: 8px;">+ Create IP Bill</button>
+    </div>
+
+    <div id="msg"></div>
+
+    <!-- KPI Grid -->
+    <div class="kpi-grid">
+      <div class="kpi-card" style="border-left: 4px solid var(--accent)">
+        <span class="kpi-label">Revenue Collected</span>
+        <div class="kpi-val" id="kpi-collected">₹0.00</div>
+        <span class="kpi-desc" id="kpi-collected-desc">Total self-pay & insurance realized</span>
+      </div>
+      <div class="kpi-card" style="border-left: 4px solid var(--warning)">
+        <span class="kpi-label">Outstanding Dues</span>
+        <div class="kpi-val" id="kpi-outstanding">₹0.00</div>
+        <span class="kpi-desc">Patient balance outstanding</span>
+      </div>
+      <div class="kpi-card" style="border-left: 4px solid var(--primary)">
+        <span class="kpi-label">Insurance Claims</span>
+        <div class="kpi-val" id="kpi-claims">₹0.00</div>
+        <span class="kpi-desc" id="kpi-claims-desc">Pending approvals under schemes/insurers</span>
+      </div>
+    </div>
+
+    <!-- Filters & Search -->
+    <div class="searchbar">
+      <input id="q" type="search" placeholder="Search by patient name, MRN, or bill number..." autofocus />
+    </div>
+
+    <div class="tabs">
+      <button class="tab active" data-filter="all">All Bills</button>
+      <button class="tab" data-filter="unpaid">Unpaid</button>
+      <button class="tab" data-filter="partial">Partially Paid</button>
+      <button class="tab" data-filter="pending_claim">Pending Claim</button>
+      <button class="tab" data-filter="paid">Paid</button>
+    </div>
+
+    <!-- Bills Table -->
+    <div class="card" style="padding:0;overflow:hidden">
+      <table class="data" id="tbl">
+        <thead>
+          <tr>
+            <th>Bill Number</th>
+            <th>Patient Name</th>
+            <th>Type</th>
+            <th>Billing Date</th>
+            <th>Total Amount</th>
+            <th>Amount Paid</th>
+            <th>Insurance / Scheme</th>
+            <th>Payment Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="rows"><tr><td colspan="9" class="empty">Loading invoices…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Create Bill Modal -->
+  <div class="modal" id="bill-modal">
+    <div class="card modal-content">
+      <h2 id="modal-title">Create Outpatient Bill</h2>
+      <div id="modal-msg"></div>
+      <form id="modal-form">
+        <label class="field full" style="margin-bottom: 16px;">
+          <span>Select Patient *</span>
+          <select id="modal-patient-select" required style="width: 100%">
+            <option value="">— Search & Select Patient —</option>
+          </select>
+        </label>
+        
+        <div id="modal-admission-container" style="display: none; margin-bottom: 16px;">
+          <label class="field full">
+            <span>Select Active Admission *</span>
+            <select id="modal-admission-select" style="width: 100%">
+              <option value="">— Select IP Admission —</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="actions">
+          <button type="submit" class="btn" id="modal-submit">Create & Itemize</button>
+          <button type="button" class="btn secondary" id="modal-cancel">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    let BILLS = [];
+    let PATIENTS = [];
+    let ADMISSIONS = [];
+    let ACTIVE_FILTER = "all";
+    let CURRENT_TYPE = "OP";
+    let PROFILE = null;
+
+    (async () => {
+      const user = await requireAuth();
+      if (!user) return;
+      PROFILE = await getCurrentProfile();
+      await renderTopbar("billing");
+      document.getElementById("page").style.display = "";
+
+      // Setup Role Permissions
+      if (PROFILE.role !== "admin" && PROFILE.role !== "reception") {
+        document.getElementById("new-op-btn").style.display = "none";
+        document.getElementById("new-ip-btn").style.display = "none";
+      }
+
+      // Bind local events
+      document.getElementById("q").addEventListener("input", render);
+      document.getElementById("new-op-btn").addEventListener("click", () => openCreateModal("OP"));
+      document.getElementById("new-ip-btn").addEventListener("click", () => openCreateModal("IP"));
+      document.getElementById("modal-cancel").addEventListener("click", closeModal);
+      document.getElementById("modal-form").addEventListener("submit", handleCreateSubmit);
+      document.getElementById("modal-patient-select").addEventListener("change", handlePatientChange);
+
+      $$(".tabs .tab").forEach(tab => {
+        tab.addEventListener("click", () => {
+          $$(".tabs .tab").forEach(t => t.classList.remove("active"));
+          tab.classList.add("active");
+          ACTIVE_FILTER = tab.dataset.filter;
+          render();
+        });
+      });
+
+      await loadData();
+    })();
+
+    async function loadData() {
+      const msg = document.getElementById("msg");
+      try {
+        // Fetch Bills
+        const { data: bills, error: bErr } = await window.sb
+          .from("bills")
+          .select("*, patients(id, full_name, mrn)")
+          .order("billing_date", { ascending: false });
+        if (bErr) throw bErr;
+        BILLS = bills || [];
+
+        // Fetch Patients
+        const { data: patients, error: pErr } = await window.sb
+          .from("patients")
+          .select("id, mrn, full_name")
+          .order("full_name");
+        if (pErr) throw pErr;
+        PATIENTS = patients || [];
+
+        // Fetch Admissions
+        const { data: admissions, error: aErr } = await window.sb
+          .from("admissions")
+          .select("id, patient_id, admission_date, discharge_date, final_diagnosis, provisional_diagnosis")
+          .order("admission_date", { ascending: false });
+        if (aErr) throw aErr;
+        ADMISSIONS = admissions || [];
+
+        calculateKPIs();
+        render();
+      } catch (e) {
+        showMsg(msg, "error", e.message || "Failed to load billing records.");
+      }
+    }
+
+    function calculateKPIs() {
+      let collected = 0;
+      let outstanding = 0;
+      let claims = 0;
+      let pendingClaimsCount = 0;
+
+      BILLS.forEach(b => {
+        collected += Number(b.amount_paid || 0);
+
+        const unpaidCopay = Number(b.patient_copay_amount || 0) + (b.insurance_type === 'Self-Pay' ? Number(b.total_amount || 0) : 0) - Number(b.amount_paid || 0);
+        outstanding += Math.max(0, unpaidCopay);
+
+        if (b.insurance_type !== "Self-Pay" && b.insurance_approval_status === "Pending") {
+          claims += Math.max(0, Number(b.total_amount || 0) - Number(b.amount_paid || 0));
+          pendingClaimsCount++;
+        }
+      });
+
+      document.getElementById("kpi-collected").textContent = `₹${collected.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+      document.getElementById("kpi-outstanding").textContent = `₹${outstanding.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+      document.getElementById("kpi-claims").textContent = `₹${claims.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+      document.getElementById("kpi-claims-desc").textContent = `${pendingClaimsCount} claims pending approval`;
+    }
+
+    function render() {
+      const q = document.getElementById("q").value.trim().toLowerCase();
+      const rows = document.getElementById("rows");
+      
+      const filtered = BILLS.filter(b => {
+        // Search filter
+        const patName = b.patients ? b.patients.full_name.toLowerCase() : "";
+        const patMrn = b.patients ? b.patients.mrn.toLowerCase() : "";
+        const billNo = b.bill_number.toLowerCase();
+        
+        const matchesSearch = !q || patName.includes(q) || patMrn.includes(q) || billNo.includes(q);
+        if (!matchesSearch) return false;
+
+        // Tab filter
+        switch (ACTIVE_FILTER) {
+          case "unpaid":
+            return b.payment_status === "Unpaid";
+          case "partial":
+            return b.payment_status === "Partially Paid";
+          case "paid":
+            return b.payment_status === "Paid";
+          case "pending_claim":
+            return b.insurance_type !== "Self-Pay" && b.insurance_approval_status === "Pending";
+          default:
+            return true;
+        }
+      });
+
+      document.getElementById("bill-count").textContent = `(${filtered.length})`;
+
+      if (filtered.length === 0) {
+        rows.innerHTML = `<tr><td colspan="9" class="empty">No invoices found matching criteria.</td></tr>`;
+        return;
+      }
+
+      rows.innerHTML = filtered.map(b => {
+        let statusClass = "muted";
+        if (b.payment_status === "Paid") statusClass = "discharged";
+        else if (b.payment_status === "Partially Paid") statusClass = "admitted";
+        else if (b.payment_status === "Unpaid") statusClass = "role";
+
+        const insText = b.insurance_type === "Self-Pay" 
+          ? `<span class="muted">Self-Pay</span>` 
+          : `<strong>${escapeHtml(b.insurance_provider || b.insurance_type)}</strong><br/><small class="muted">${escapeHtml(b.insurance_approval_status)}</small>`;
+
+        return `
+          <tr class="clickable" data-id="${escapeHtml(b.id)}">
+            <td><strong>${escapeHtml(b.bill_number)}</strong></td>
+            <td>${escapeHtml(b.patients ? b.patients.full_name : "Unknown")} <br/><small class="muted">MRN: ${escapeHtml(b.patients ? b.patients.mrn : "—")}</small></td>
+            <td><span class="badge ${b.bill_type === 'IP' ? 'admitted' : 'role'}">${b.bill_type}</span></td>
+            <td>${fmtDate(b.billing_date)}</td>
+            <td><strong>₹${Number(b.total_amount || 0).toFixed(2)}</strong></td>
+            <td>₹${Number(b.amount_paid || 0).toFixed(2)}</td>
+            <td>${insText}</td>
+            <td><span class="badge ${statusClass}">${b.payment_status}</span></td>
+            <td><a class="btn small secondary" href="bill-detail.html?id=${encodeURIComponent(b.id)}">Open</a></td>
+          </tr>`;
+      }).join("");
+
+      $$("#rows tr.clickable").forEach(tr => {
+        tr.addEventListener("click", () => {
+          window.location.href = `bill-detail.html?id=${encodeURIComponent(tr.dataset.id)}`;
+        });
+      });
+    }
+
+    function openCreateModal(type) {
+      CURRENT_TYPE = type;
+      document.getElementById("modal-title").textContent = type === "IP" ? "Create Inpatient (IP) Bill" : "Create Outpatient (OP) Bill";
+      
+      const patSelect = document.getElementById("modal-patient-select");
+      patSelect.innerHTML = `<option value="">— Search & Select Patient —</option>` + 
+        PATIENTS.map(p => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.full_name)} (MRN: ${escapeHtml(p.mrn)})</option>`).join("");
+      
+      patSelect.value = "";
+      document.getElementById("modal-admission-select").innerHTML = `<option value="">— Select IP Admission —</option>`;
+      document.getElementById("modal-admission-container").style.display = "none";
+      document.getElementById("modal-msg").innerHTML = "";
+
+      document.getElementById("bill-modal").style.display = "flex";
+    }
+
+    function closeModal() {
+      document.getElementById("bill-modal").style.display = "none";
+    }
+
+    function handlePatientChange() {
+      const patId = document.getElementById("modal-patient-select").value;
+      const admContainer = document.getElementById("modal-admission-container");
+      const admSelect = document.getElementById("modal-admission-select");
+
+      if (CURRENT_TYPE === "IP" && patId) {
+        // Filter admissions for this patient
+        const filteredAdms = ADMISSIONS.filter(a => a.patient_id === patId);
+        
+        if (filteredAdms.length === 0) {
+          showMsg(document.getElementById("modal-msg"), "error", "No inpatient admissions found for this patient. Please create an admission first.");
+          admSelect.innerHTML = `<option value="">— No active admissions —</option>`;
+          admContainer.style.display = "block";
+          return;
+        }
+
+        document.getElementById("modal-msg").innerHTML = "";
+        admSelect.innerHTML = `<option value="">— Select Inpatient Admission —</option>` + 
+          filteredAdms.map(a => {
+            const diag = a.final_diagnosis || a.provisional_diagnosis || "No diagnosis logged";
+            const dateStr = fmtDate(a.admission_date);
+            const status = a.discharge_date ? `Discharged ${fmtDate(a.discharge_date)}` : 'Admitted';
+            return `<option value="${escapeHtml(a.id)}">${dateStr} (${status}) - ${escapeHtml(diag.slice(0, 30))}</option>`;
+          }).join("");
+        
+        admContainer.style.display = "block";
+      } else {
+        admContainer.style.display = "none";
+      }
+    }
+
+    async function handleCreateSubmit(e) {
+      e.preventDefault();
+      const patId = document.getElementById("modal-patient-select").value;
+      const admId = document.getElementById("modal-admission-select").value || null;
+      const modalMsg = document.getElementById("modal-msg");
+
+      if (!patId) return;
+      if (CURRENT_TYPE === "IP" && !admId) {
+        showMsg(modalMsg, "error", "Please select an admission record.");
+        return;
+      }
+
+      // Check if IP bill already exists
+      if (CURRENT_TYPE === "IP" && admId) {
+        const { data: existing, error: checkErr } = await window.sb
+          .from("bills")
+          .select("id")
+          .eq("admission_id", admId)
+          .maybeSingle();
+        
+        if (checkErr) { showMsg(modalMsg, "error", checkErr.message); return; }
+        if (existing) {
+          window.location.href = `bill-detail.html?id=${encodeURIComponent(existing.id)}`;
+          return;
+        }
+      }
+
+      const submitBtn = document.getElementById("modal-submit");
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Creating Invoice…";
+
+      try {
+        const billNo = await generateBillNumber(CURRENT_TYPE);
+        const { data, error } = await window.sb
+          .from("bills")
+          .insert({
+            patient_id: patId,
+            admission_id: admId,
+            bill_type: CURRENT_TYPE,
+            bill_number: billNo,
+            billing_date: new Date().toISOString(),
+            created_by: PROFILE.id
+          })
+          .select()
+          .single();
+        
+        if (error) throw error;
+        window.location.href = `bill-detail.html?id=${encodeURIComponent(data.id)}`;
+      } catch (err) {
+        showMsg(modalMsg, "error", err.message || "Failed to create invoice.");
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Create & Itemize";
+      }
+    }
+  </script>
+</body>
+</html>

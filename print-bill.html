@@ -1,0 +1,502 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Receipt - Ponugoti Hospital</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+  <style>
+    body {
+      background: #f1f5f9;
+      padding: 0;
+      margin: 0;
+    }
+    .print-sheet {
+      background: #fff;
+      padding: 40px 48px;
+      max-width: 800px;
+      margin: 24px auto;
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      min-height: 297mm; /* Standard A4 height aspect */
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .hospital-head {
+      text-align: center;
+      border-bottom: 2px solid var(--primary-dark);
+      padding-bottom: 12px;
+      margin-bottom: 20px;
+    }
+    .hospital-head h1 {
+      margin: 0;
+      color: var(--primary-dark);
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: .5px;
+    }
+    .hospital-head p {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .invoice-title-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 8px;
+    }
+    .invoice-title-bar h2 {
+      margin: 0;
+      font-size: 18px;
+      color: var(--text);
+      text-transform: uppercase;
+      letter-spacing: .5px;
+    }
+    .bill-meta-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px 24px;
+      margin-bottom: 24px;
+      font-size: 13px;
+    }
+    .bill-meta-grid div {
+      display: flex;
+      justify-content: space-between;
+      border-bottom: 1px dashed var(--border);
+      padding-bottom: 4px;
+    }
+    .bill-meta-grid b {
+      color: var(--muted);
+      font-weight: 500;
+    }
+    .bill-meta-grid span {
+      font-weight: 600;
+      color: var(--text);
+    }
+    .items-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 24px;
+      font-size: 13px;
+    }
+    .items-table th, .items-table td {
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+    }
+    .items-table th {
+      background: #f8fafc;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      font-size: 11px;
+      letter-spacing: .3px;
+    }
+    .financial-summary {
+      display: flex;
+      justify-content: flex-end;
+      margin-bottom: 24px;
+    }
+    .summary-table {
+      width: 320px;
+      font-size: 13px;
+      border-collapse: collapse;
+    }
+    .summary-table td {
+      padding: 6px 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    .summary-table tr.total-row td {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--primary-dark);
+      border-top: 1.5px solid var(--primary-dark);
+      border-bottom: 2px double var(--primary-dark);
+      padding-top: 10px;
+    }
+    .payment-breakdown {
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 18px;
+      font-size: 13px;
+      margin-bottom: 30px;
+    }
+    .payment-breakdown h4 {
+      margin: 0 0 8px;
+      color: var(--primary-dark);
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+    }
+    .payment-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px 20px;
+    }
+    .payment-grid div {
+      display: flex;
+      justify-content: space-between;
+    }
+    .payment-grid b {
+      color: var(--muted);
+      font-weight: 500;
+    }
+    .signatures {
+      margin-top: 50px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+    }
+    .sig-block {
+      text-align: center;
+      width: 200px;
+    }
+    .sig-line {
+      border-top: 1px solid var(--text);
+      margin-bottom: 6px;
+      padding-top: 4px;
+    }
+    
+    @media print {
+      body {
+        background: #fff;
+        padding: 0;
+      }
+      .print-sheet {
+        border: none;
+        box-shadow: none;
+        margin: 0;
+        padding: 0;
+        min-height: 0;
+      }
+      .no-print-action {
+        display: none !important;
+      }
+    }
+    
+    .no-print-action {
+      background: #fff;
+      max-width: 800px;
+      margin: 16px auto 0;
+      padding: 12px;
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Floating Print Trigger Action -->
+  <div class="no-print-action">
+    <button class="btn" onclick="window.print()">Print This Invoice</button>
+    <button class="btn secondary" onclick="window.close()">Close Window</button>
+  </div>
+
+  <div class="print-sheet" id="print-sheet" style="display: none;">
+    <!-- Main receipt body container -->
+    <div>
+      <!-- Letterhead -->
+      <div class="hospital-head">
+        <h1 id="lbl-hospital-name">…</h1>
+        <p id="lbl-hospital-tagline">…</p>
+      </div>
+
+      <!-- Invoice Title -->
+      <div class="invoice-title-bar">
+        <h2>INVOICE RECEIPT</h2>
+        <span style="font-weight: 700; color: var(--primary-dark); font-size: 15px;" id="lbl-bill-number">BILL-0000</span>
+      </div>
+
+      <!-- Patient / Bill Meta Grid -->
+      <div class="bill-meta-grid">
+        <div>
+          <b>Patient Name:</b>
+          <span id="lbl-pat-name">…</span>
+        </div>
+        <div>
+          <b>Billing Date:</b>
+          <span id="lbl-bill-date">…</span>
+        </div>
+        <div>
+          <b>MRN:</b>
+          <span id="lbl-pat-mrn">…</span>
+        </div>
+        <div>
+          <b>Bill Type:</b>
+          <span id="lbl-bill-type">…</span>
+        </div>
+        <div>
+          <b>Age / Sex:</b>
+          <span id="lbl-pat-age-sex">…</span>
+        </div>
+        <div>
+          <b>Phone Number:</b>
+          <span id="lbl-pat-phone">…</span>
+        </div>
+        <div id="lbl-adm-date-container" style="display: none;">
+          <b>Admission Date:</b>
+          <span id="lbl-adm-date">…</span>
+        </div>
+        <div id="lbl-dis-date-container" style="display: none;">
+          <b>Discharge Date:</b>
+          <span id="lbl-dis-date">…</span>
+        </div>
+      </div>
+
+      <!-- Items Table -->
+      <table class="items-table">
+        <thead>
+          <tr>
+            <th>Service / Charge Description</th>
+            <th>Category</th>
+            <th style="text-align:right">Qty</th>
+            <th style="text-align:right">Unit Price</th>
+            <th style="text-align:right; width: 120px;">Total Price</th>
+          </tr>
+        </thead>
+        <tbody id="tbl-items-rows">
+          <!-- Populated dynamically -->
+        </tbody>
+      </table>
+
+      <!-- Financial Totals -->
+      <div class="financial-summary">
+        <table class="summary-table">
+          <tr>
+            <td>Subtotal</td>
+            <td style="text-align:right; font-weight: 600;" id="lbl-subtotal">₹0.00</td>
+          </tr>
+          <tr>
+            <td>Discount</td>
+            <td style="text-align:right; font-weight: 600; color: var(--danger);" id="lbl-discount">-₹0.00</td>
+          </tr>
+          <tr>
+            <td>Tax / VAT</td>
+            <td style="text-align:right; font-weight: 600;" id="lbl-tax">₹0.00</td>
+          </tr>
+          <tr class="total-row">
+            <td>Grand Total</td>
+            <td style="text-align:right;" id="lbl-total">₹0.00</td>
+          </tr>
+        </table>
+      </div>
+
+      <!-- Payment / Insurance Claims Breakdown -->
+      <div class="payment-breakdown">
+        <h4 id="lbl-payment-title">Payment & Insurance Settlement</h4>
+        <div class="payment-grid">
+          <div>
+            <b>Coverage Type:</b>
+            <span id="lbl-pay-type">Self-Pay</span>
+          </div>
+          <div>
+            <b>Amount Paid (Patient):</b>
+            <span style="color: var(--accent); font-weight: 700;" id="lbl-pay-amount-paid">₹0.00</span>
+          </div>
+          
+          <!-- Dynamic Insurance details -->
+          <div class="ins-meta-row" style="display:none">
+            <b>Insurer / Scheme:</b>
+            <span id="lbl-ins-provider">—</span>
+          </div>
+          <div class="ins-meta-row" style="display:none">
+            <b>Policy / Card No:</b>
+            <span id="lbl-ins-policy">—</span>
+          </div>
+          <div class="ins-meta-row" style="display:none">
+            <b>Pre-Auth ID:</b>
+            <span id="lbl-ins-preauth">—</span>
+          </div>
+          <div class="ins-meta-row" style="display:none">
+            <b>Claim Approval:</b>
+            <span id="lbl-ins-status">Pending</span>
+          </div>
+          <div class="ins-meta-row" style="display:none">
+            <b>Approved Claim Amt:</b>
+            <span id="lbl-ins-approved">₹0.00</span>
+          </div>
+          <div class="ins-meta-row" style="display:none">
+            <b>Patient Copay Amt:</b>
+            <span id="lbl-ins-copay">₹0.00</span>
+          </div>
+          
+          <div>
+            <b>Settlement Mode:</b>
+            <span id="lbl-pay-mode">Cash</span>
+          </div>
+          <div>
+            <b>Balance Patient Portion Due:</b>
+            <span style="color: var(--danger); font-weight: 700;" id="lbl-pay-balance-due">₹0.00</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Signatures -->
+    <div class="signatures">
+      <div class="sig-block">
+        <div class="sig-line">Patient / Guardian Signature</div>
+        <small style="color: var(--muted);">Date: ____/____/________</small>
+      </div>
+      <div class="sig-block">
+        <div class="sig-line">Billing Executive Signature</div>
+        <small style="color: var(--muted);" id="lbl-clerk-name">Ponugoti Hospital</small>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let BILL_ID = null;
+
+    function getBillId() {
+      return new URLSearchParams(window.location.search).get("id");
+    }
+
+    (async () => {
+      const user = await requireAuth();
+      if (!user) return;
+
+      BILL_ID = getBillId();
+      if (!BILL_ID) {
+        alert("Invoice ID missing.");
+        return;
+      }
+
+      await loadPrintData();
+    })();
+
+    async function loadPrintData() {
+      try {
+        const cfg = window.PONUGOTI_CONFIG;
+        document.getElementById("lbl-hospital-name").textContent = cfg.HOSPITAL_NAME;
+        document.getElementById("lbl-hospital-tagline").textContent = cfg.HOSPITAL_TAGLINE;
+
+        // Fetch bill details
+        const { data: bill, error: bErr } = await window.sb
+          .from("bills")
+          .select("*, patients(*), admissions(*), profiles!bills_created_by_fkey(full_name)")
+          .eq("id", BILL_ID)
+          .maybeSingle();
+        
+        if (bErr) throw bErr;
+        if (!bill) throw new Error("Invoice not found.");
+
+        // Fetch bill items
+        const { data: items, error: iErr } = await window.sb
+          .from("bill_items")
+          .select("*")
+          .eq("bill_id", BILL_ID)
+          .order("created_at");
+        if (iErr) throw iErr;
+
+        document.getElementById("print-sheet").style.display = "flex";
+
+        // Map Patient / Bill details
+        document.getElementById("lbl-bill-number").textContent = bill.bill_number;
+        document.getElementById("lbl-pat-name").textContent = bill.patients ? bill.patients.full_name : "Unknown";
+        document.getElementById("lbl-bill-date").textContent = fmtDateTime(bill.billing_date);
+        document.getElementById("lbl-pat-mrn").textContent = bill.patients ? bill.patients.mrn : "—";
+        document.getElementById("lbl-bill-type").textContent = `${bill.bill_type} Billing`;
+        
+        const age = bill.patients && bill.patients.dob ? `${ageFromDob(bill.patients.dob)}y` : "";
+        const sex = bill.patients && bill.patients.sex ? bill.patients.sex : "";
+        document.getElementById("lbl-pat-age-sex").textContent = age && sex ? `${age} / ${sex}` : age || sex || "—";
+        document.getElementById("lbl-pat-phone").textContent = bill.patients ? bill.patients.phone || "—" : "—";
+
+        // Admission details (if IP)
+        if (bill.bill_type === "IP" && bill.admissions) {
+          document.getElementById("lbl-adm-date").textContent = fmtDateTime(bill.admissions.admission_date);
+          document.getElementById("lbl-adm-date-container").style.display = "flex";
+          if (bill.admissions.discharge_date) {
+            document.getElementById("lbl-dis-date").textContent = fmtDateTime(bill.admissions.discharge_date);
+            document.getElementById("lbl-dis-date-container").style.display = "flex";
+          }
+        }
+
+        // Render Invoice Items
+        const tbody = document.getElementById("tbl-items-rows");
+        if (items.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="5" class="empty">No services charged.</td></tr>`;
+        } else {
+          tbody.innerHTML = items.map(item => `
+            <tr>
+              <td><strong>${escapeHtml(item.item_name)}</strong></td>
+              <td>${escapeHtml(item.category)}</td>
+              <td style="text-align:right">${Number(item.quantity)}</td>
+              <td style="text-align:right">₹${Number(item.unit_price).toFixed(2)}</td>
+              <td style="text-align:right; font-weight:600;">₹${Number(item.total_price).toFixed(2)}</td>
+            </tr>
+          `).join("");
+        }
+
+        // Math calculations
+        const subtotal = Number(bill.subtotal || 0);
+        const discount = Number(bill.discount_amount || 0);
+        const tax = Number(bill.tax_amount || 0);
+        const total = Number(bill.total_amount || 0);
+        const paid = Number(bill.amount_paid || 0);
+
+        document.getElementById("lbl-subtotal").textContent = `₹${subtotal.toFixed(2)}`;
+        document.getElementById("lbl-discount").textContent = `-₹${discount.toFixed(2)}`;
+        document.getElementById("lbl-tax").textContent = `₹${tax.toFixed(2)}`;
+        document.getElementById("lbl-total").textContent = `₹${total.toFixed(2)}`;
+
+        // Payment / Claims Box mapping
+        document.getElementById("lbl-pay-type").textContent = bill.insurance_type;
+        document.getElementById("lbl-pay-amount-paid").textContent = `₹${paid.toFixed(2)}`;
+        document.getElementById("lbl-pay-mode").textContent = bill.payment_mode;
+
+        const isInsurance = bill.insurance_type !== "Self-Pay";
+        if (isInsurance) {
+          document.getElementById("lbl-ins-provider").textContent = bill.insurance_provider || "—";
+          document.getElementById("lbl-ins-policy").textContent = bill.insurance_policy_number || "—";
+          document.getElementById("lbl-ins-preauth").textContent = bill.insurance_preauth_id || "—";
+          document.getElementById("lbl-ins-status").textContent = bill.insurance_approval_status;
+          document.getElementById("lbl-ins-approved").textContent = `₹${Number(bill.insurance_approved_amount || 0).toFixed(2)}`;
+          document.getElementById("lbl-ins-copay").textContent = `₹${Number(bill.patient_copay_amount || 0).toFixed(2)}`;
+
+          $$(".ins-meta-row").forEach(el => el.style.display = "flex");
+        }
+
+        // Calculate patient due
+        const copay = Number(bill.patient_copay_amount || 0);
+        let patientPortion = total;
+        
+        if (isInsurance) {
+          if (bill.insurance_approval_status === "Approved") {
+            patientPortion = copay + Math.max(0, total - Number(bill.insurance_approved_amount || 0) - copay);
+          } else if (bill.insurance_approval_status === "Rejected") {
+            patientPortion = total;
+          } else {
+            patientPortion = copay;
+          }
+        }
+        
+        const balance = Math.max(0, patientPortion - paid);
+        document.getElementById("lbl-pay-balance-due").textContent = `₹${balance.toFixed(2)}`;
+        
+        // Billing clerk signature mapping
+        const clerkName = bill.profiles ? bill.profiles.full_name : "";
+        document.getElementById("lbl-clerk-name").textContent = clerkName ? `${clerkName} (Billing Clerk)` : cfg.HOSPITAL_NAME;
+
+      } catch (err) {
+        alert(err.message || "Failed to load receipt details.");
+      }
+    }
+  </script>
+</body>
+</html>

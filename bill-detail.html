@@ -1,0 +1,874 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Invoice Details - Ponugoti Hospital</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+  <style>
+    .billing-layout {
+      display: grid;
+      grid-template-columns: 3fr 2fr;
+      gap: 20px;
+    }
+    @media (max-width: 900px) {
+      .billing-layout {
+        grid-template-columns: 1fr;
+      }
+    }
+    .summary-box {
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin-top: 16px;
+    }
+    .summary-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 0;
+      font-size: 14px;
+    }
+    .summary-row.total {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--primary-dark);
+      border-top: 1px solid var(--border);
+      padding-top: 10px;
+      margin-top: 6px;
+    }
+    .catalog-picker {
+      background: #f1f5f9;
+      border-radius: var(--radius);
+      padding: 14px;
+      margin-bottom: 16px;
+      display: flex;
+      gap: 10px;
+      align-items: flex-end;
+      flex-wrap: wrap;
+    }
+    .catalog-picker label {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--muted);
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .catalog-picker select, .catalog-picker input {
+      padding: 6px 10px;
+      font-size: 13px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: #fff;
+    }
+    .badge.payment {
+      font-size: 13px;
+      padding: 4px 10px;
+    }
+    .section-title {
+      font-weight: 600;
+      color: var(--primary-dark);
+      margin-bottom: 12px;
+      padding-bottom: 4px;
+      border-bottom: 1px solid var(--border);
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container" id="page" style="display:none">
+    
+    <!-- Invoice Header -->
+    <div class="page-title no-print">
+      <h1>Invoice: <span id="bill-no-header">…</span></h1>
+      <span class="badge payment" id="bill-status-badge">Unpaid</span>
+      <div style="flex:1"></div>
+      <a class="btn secondary" href="billing.html">← Back to billing</a>
+      <a class="btn" id="print-receipt-btn" target="_blank">Print Receipt (A4)</a>
+    </div>
+
+    <div id="msg"></div>
+
+    <div class="billing-layout">
+      <!-- Left Column: Patient Details & Line Items -->
+      <div>
+        <!-- Patient Demo Summary -->
+        <div class="card">
+          <h2>Patient & Invoice Info</h2>
+          <div class="form-grid" style="grid-template-columns: repeat(3, 1fr);">
+            <div>
+              <span class="muted" style="font-size:12px">PATIENT NAME</span>
+              <div style="font-weight: 600;" id="info-pat-name">…</div>
+            </div>
+            <div>
+              <span class="muted" style="font-size:12px">MRN</span>
+              <div style="font-weight: 600;" id="info-pat-mrn">…</div>
+            </div>
+            <div>
+              <span class="muted" style="font-size:12px">BILL TYPE</span>
+              <div style="font-weight: 600;" id="info-bill-type">…</div>
+            </div>
+            <div>
+              <span class="muted" style="font-size:12px">BILLING DATE</span>
+              <div style="font-weight: 600;" id="info-bill-date">…</div>
+            </div>
+            <div>
+              <span class="muted" style="font-size:12px">PHONE NUMBER</span>
+              <div style="font-weight: 600;" id="info-pat-phone">…</div>
+            </div>
+            <div>
+              <span class="muted" style="font-size:12px">ADMISSION ID</span>
+              <div style="font-weight: 600;" id="info-adm-id">—</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Line Items Editor -->
+        <div class="card">
+          <h2>Invoice Items
+            <button class="btn small secondary" id="btn-import-labs" style="float:right; display:none;">Import Lab Tests</button>
+          </h2>
+
+          <!-- Add Item Form (Inline Catalog Selector) -->
+          <div class="catalog-picker no-print" id="item-picker-container">
+            <label style="flex: 2; min-width: 180px;">
+              <span>Select Service / Item</span>
+              <select id="select-catalog">
+                <option value="">— Select Catalog Item —</option>
+              </select>
+            </label>
+            <label style="flex: 1; min-width: 100px;">
+              <span>Quantity</span>
+              <input id="input-qty" type="number" value="1" min="1" step="any" />
+            </label>
+            <label style="flex: 1; min-width: 100px;">
+              <span>Unit Price (₹)</span>
+              <input id="input-price" type="number" value="0.00" min="0" step="any" />
+            </label>
+            <button class="btn small" type="button" id="btn-add-item" style="height: 33px;">Add Item</button>
+          </div>
+
+          <!-- Line Items Table -->
+          <table class="data" id="bill-items-tbl">
+            <thead>
+              <tr>
+                <th>Service / Charge Item</th>
+                <th>Category</th>
+                <th style="text-align:right">Qty</th>
+                <th style="text-align:right">Unit Price</th>
+                <th style="text-align:right">Total</th>
+                <th class="no-print"></th>
+              </tr>
+            </thead>
+            <tbody id="bill-items-rows">
+              <tr><td colspan="6" class="empty">No items added to invoice.</td></tr>
+            </tbody>
+          </table>
+
+          <!-- Financial Calculation Summary Box -->
+          <div class="summary-box">
+            <div class="summary-row">
+              <span>Subtotal:</span>
+              <strong id="calc-subtotal">₹0.00</strong>
+            </div>
+            <div class="summary-row no-print">
+              <span>Discount Amount (₹):</span>
+              <input id="calc-discount" type="number" value="0.00" min="0" step="any" style="width: 100px; text-align: right; padding: 4px;" />
+            </div>
+            <div class="summary-row no-print">
+              <span>Tax Rate (%):</span>
+              <input id="calc-tax-rate" type="number" value="0.00" min="0" step="any" style="width: 100px; text-align: right; padding: 4px;" />
+            </div>
+            <div class="summary-row total">
+              <span>Grand Total:</span>
+              <span id="calc-total">₹0.00</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column: Payments, Claims & Insurance Panel -->
+      <div>
+        <!-- Insurance Integration -->
+        <div class="card">
+          <h2>Insurance & Schemes</h2>
+          <form id="insurance-form">
+            <label class="field" style="margin-bottom: 12px;">
+              <span>Coverage Type</span>
+              <select id="ins-type" required>
+                <option value="Self-Pay">Self-Pay (Cash/UPI/Card)</option>
+                <option value="Private Insurance">Private Insurance</option>
+                <option value="State Scheme">State Government Scheme</option>
+              </select>
+            </label>
+
+            <div id="ins-details-container" style="display: none;">
+              <label class="field" style="margin-bottom: 12px;">
+                <span>Provider / Scheme Name</span>
+                <select id="ins-provider">
+                  <!-- Will be loaded dynamically based on type -->
+                </select>
+              </label>
+              
+              <label class="field" style="margin-bottom: 12px;">
+                <span>Policy / Card Number</span>
+                <input id="ins-policy" placeholder="e.g. StarHealth-738927" />
+              </label>
+
+              <label class="field" style="margin-bottom: 12px;">
+                <span>Pre-Authorization ID</span>
+                <input id="ins-preauth" placeholder="e.g. PRE-AUTH-9201" />
+              </label>
+
+              <label class="field" style="margin-bottom: 12px;">
+                <span>Pre-Auth Claim Status</span>
+                <select id="ins-status">
+                  <option value="Pending">Pending Approval</option>
+                  <option value="Approved">Approved</option>
+                  <option value="Rejected">Rejected</option>
+                </select>
+              </label>
+
+              <div class="form-grid" style="margin-bottom: 12px;">
+                <label class="field">
+                  <span>Approved Amt (₹)</span>
+                  <input id="ins-approved-amount" type="number" value="0.00" min="0" step="any" />
+                </label>
+                <label class="field">
+                  <span>Patient Copay (₹)</span>
+                  <input id="ins-copay-amount" type="number" value="0.00" min="0" step="any" />
+                </label>
+              </div>
+            </div>
+
+            <button class="btn secondary small no-print" type="submit" id="btn-save-insurance" style="width: 100%">Update Insurance Details</button>
+          </form>
+        </div>
+
+        <!-- Payments Panel -->
+        <div class="card">
+          <h2>Record Payment</h2>
+          
+          <div class="summary-box" style="background: #eef2f6; margin-top: 0; margin-bottom: 16px;">
+            <div class="summary-row">
+              <span>Patient Portion Due:</span>
+              <strong id="pay-patient-due" style="color: var(--danger)">₹0.00</strong>
+            </div>
+            <div class="summary-row">
+              <span>Total Amount Paid:</span>
+              <strong id="pay-amount-realized" style="color: var(--accent)">₹0.00</strong>
+            </div>
+          </div>
+
+          <form id="payment-form">
+            <div class="form-grid" style="margin-bottom: 12px;">
+              <label class="field">
+                <span>Record Pay Amt (₹)</span>
+                <input id="pay-amount-input" type="number" value="0.00" min="0" step="any" required />
+              </label>
+              <label class="field">
+                <span>Payment Mode</span>
+                <select id="pay-mode" required>
+                  <option value="Cash">Cash</option>
+                  <option value="UPI">UPI</option>
+                  <option value="Card">Card</option>
+                  <option value="Insurance">Insurance Realization</option>
+                  <option value="Mixed">Mixed Modes</option>
+                </select>
+              </label>
+            </div>
+
+            <label class="field" style="margin-bottom: 16px;">
+              <span>Transaction Reference / Notes</span>
+              <input id="pay-ref" placeholder="e.g. UPI ID, Check No, Remarks" />
+            </label>
+
+            <button class="btn small no-print" type="submit" id="btn-record-payment" style="width: 100%; background: var(--accent); border-color: var(--accent)">Record Receipt Payment</button>
+          </form>
+        </div>
+
+        <!-- Action Panel -->
+        <div class="actions no-print" style="margin-top: 20px;">
+          <button class="btn danger" id="btn-delete-bill" style="flex: 1">Delete Invoice</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let BILL_ID = null;
+    let BILL = null;
+    let BILL_ITEMS = [];
+    let CATALOG = [];
+    let INVESTIGATIONS = [];
+    let PROFILE = null;
+
+    const INS_PROVIDERS = {
+      "Private Insurance": [
+        "Star Health Insurance",
+        "HDFC ERGO General Insurance",
+        "Niva Bupa Health Insurance",
+        "ICICI Lombard",
+        "Care Health Insurance"
+      ],
+      "State Scheme": [
+        "Dr. YSR Aarogyasri (AP)",
+        "Ayushman Bharat (PM-JAY)",
+        "Rajiv Gandhi Jeevandayee (Maharashtra)",
+        "Biju Swasthya Kalyan Yojana (Odisha)"
+      ]
+    };
+
+    function getBillId() {
+      return new URLSearchParams(window.location.search).get("id");
+    }
+
+    (async () => {
+      const user = await requireAuth();
+      if (!user) return;
+      PROFILE = await getCurrentProfile();
+      
+      BILL_ID = getBillId();
+      if (!BILL_ID) {
+        showMsg(document.getElementById("msg"), "error", "Missing Invoice ID.");
+        return;
+      }
+
+      document.getElementById("page").style.display = "";
+      document.getElementById("print-receipt-btn").href = `print-bill.html?id=${encodeURIComponent(BILL_ID)}`;
+
+      // Setup Role Gating
+      if (PROFILE.role !== "admin" && PROFILE.role !== "reception") {
+        document.getElementById("item-picker-container").style.display = "none";
+        document.getElementById("calc-discount").disabled = true;
+        document.getElementById("calc-tax-rate").disabled = true;
+        $$("#insurance-form input, #insurance-form select, #insurance-form button").forEach(el => el.disabled = true);
+        $$("#payment-form input, #payment-form select, #payment-form button").forEach(el => el.disabled = true);
+        document.getElementById("btn-delete-bill").style.display = "none";
+      }
+
+      if (PROFILE.role !== "admin") {
+        document.getElementById("btn-delete-bill").style.display = "none";
+      }
+
+      // Local bindings
+      document.getElementById("ins-type").addEventListener("change", handleInsuranceTypeChange);
+      document.getElementById("select-catalog").addEventListener("change", handleCatalogSelect);
+      document.getElementById("btn-add-item").addEventListener("click", handleAddItem);
+      document.getElementById("calc-discount").addEventListener("input", calculateTotals);
+      document.getElementById("calc-tax-rate").addEventListener("input", calculateTotals);
+      document.getElementById("calc-discount").addEventListener("change", saveFinancialChanges);
+      document.getElementById("calc-tax-rate").addEventListener("change", saveFinancialChanges);
+      document.getElementById("insurance-form").addEventListener("submit", handleInsuranceSubmit);
+      document.getElementById("payment-form").addEventListener("submit", handlePaymentSubmit);
+      document.getElementById("btn-import-labs").addEventListener("click", handleImportLabs);
+      document.getElementById("btn-delete-bill").addEventListener("click", handleDeleteBill);
+
+      await loadBillData();
+      await loadCatalog();
+    })();
+
+    async function loadBillData() {
+      const msg = document.getElementById("msg");
+      try {
+        // Fetch bill details
+        const { data: bill, error: bErr } = await window.sb
+          .from("bills")
+          .select("*, patients(*), admissions(*)")
+          .eq("id", BILL_ID)
+          .maybeSingle();
+        
+        if (bErr) throw bErr;
+        if (!bill) throw new Error("Invoice not found.");
+        BILL = bill;
+
+        // Fetch bill items
+        const { data: items, error: iErr } = await window.sb
+          .from("bill_items")
+          .select("*")
+          .eq("bill_id", BILL_ID)
+          .order("created_at");
+        if (iErr) throw iErr;
+        BILL_ITEMS = items || [];
+
+        // Set top header info
+        document.getElementById("bill-no-header").textContent = BILL.bill_number;
+        const statusBadge = document.getElementById("bill-status-badge");
+        statusBadge.textContent = BILL.payment_status;
+        statusBadge.className = "badge payment " + 
+          (BILL.payment_status === "Paid" ? "discharged" : BILL.payment_status === "Partially Paid" ? "admitted" : "role");
+
+        // Set Demo panel
+        document.getElementById("info-pat-name").textContent = BILL.patients ? BILL.patients.full_name : "Unknown";
+        document.getElementById("info-pat-mrn").textContent = BILL.patients ? BILL.patients.mrn : "—";
+        document.getElementById("info-bill-type").textContent = `${BILL.bill_type} Invoice`;
+        document.getElementById("info-bill-date").textContent = fmtDateTime(BILL.billing_date);
+        document.getElementById("info-pat-phone").textContent = BILL.patients ? BILL.patients.phone || "—" : "—";
+        
+        if (BILL.bill_type === "IP" && BILL.admission_id) {
+          document.getElementById("info-adm-id").innerHTML = `<a href="patient.html?id=${BILL.patient_id}">${BILL.admission_id.slice(0, 8)}…</a>`;
+          document.getElementById("btn-import-labs").style.display = "block";
+          
+          // Fetch investigations for this admission
+          const { data: invs } = await window.sb
+            .from("investigations")
+            .select("*")
+            .eq("admission_id", BILL.admission_id);
+          INVESTIGATIONS = invs || [];
+        } else {
+          document.getElementById("info-adm-id").textContent = "N/A (Outpatient)";
+          document.getElementById("btn-import-labs").style.display = "none";
+        }
+
+        // Set financial inputs
+        document.getElementById("calc-discount").value = BILL.discount_amount || "0.00";
+        // Calculate tax rate from tax amount
+        const sub = Number(BILL.subtotal || 0);
+        const disc = Number(BILL.discount_amount || 0);
+        const taxable = Math.max(0, sub - disc);
+        const taxRate = taxable > 0 ? (Number(BILL.tax_amount || 0) / taxable) * 100 : 0.00;
+        document.getElementById("calc-tax-rate").value = taxRate.toFixed(2);
+
+        // Set Insurance Panel
+        document.getElementById("ins-type").value = BILL.insurance_type;
+        handleInsuranceTypeChange();
+        
+        if (BILL.insurance_type !== "Self-Pay") {
+          document.getElementById("ins-provider").value = BILL.insurance_provider || "";
+          document.getElementById("ins-policy").value = BILL.insurance_policy_number || "";
+          document.getElementById("ins-preauth").value = BILL.insurance_preauth_id || "";
+          document.getElementById("ins-status").value = BILL.insurance_approval_status || "Pending";
+          document.getElementById("ins-approved-amount").value = BILL.insurance_approved_amount || "0.00";
+          document.getElementById("ins-copay-amount").value = BILL.patient_copay_amount || "0.00";
+        }
+
+        // Realized payments info
+        document.getElementById("pay-amount-realized").textContent = `₹${Number(BILL.amount_paid || 0).toFixed(2)}`;
+        
+        renderItemsList();
+        calculateTotals();
+      } catch (err) {
+        showMsg(msg, "error", err.message || "Failed to load invoice.");
+      }
+    }
+
+    async function loadCatalog() {
+      const { data } = await window.sb
+        .from("billing_services")
+        .select("*")
+        .order("item_name");
+      CATALOG = data || [];
+
+      document.getElementById("select-catalog").innerHTML = `<option value="">— Select Catalog Item —</option>` + 
+        `<option value="custom">— CUSTOM NON-CATALOG ITEM —</option>` +
+        CATALOG.map(c => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.item_name)} (₹${c.default_price})</option>`).join("");
+    }
+
+    function handleCatalogSelect() {
+      const selId = document.getElementById("select-catalog").value;
+      if (selId === "custom") {
+        document.getElementById("input-price").value = "0.00";
+        document.getElementById("input-qty").value = "1";
+        return;
+      }
+      
+      const item = CATALOG.find(c => c.id === selId);
+      if (item) {
+        document.getElementById("input-price").value = item.default_price.toFixed(2);
+        document.getElementById("input-qty").value = "1";
+      } else {
+        document.getElementById("input-price").value = "0.00";
+      }
+    }
+
+    function handleInsuranceTypeChange() {
+      const type = document.getElementById("ins-type").value;
+      const detailsContainer = document.getElementById("ins-details-container");
+      const providerSelect = document.getElementById("ins-provider");
+
+      if (type === "Self-Pay") {
+        detailsContainer.style.display = "none";
+        document.getElementById("ins-provider").required = false;
+      } else {
+        const providers = INS_PROVIDERS[type] || [];
+        providerSelect.innerHTML = providers.map(p => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join("");
+        detailsContainer.style.display = "block";
+        document.getElementById("ins-provider").required = true;
+      }
+    }
+
+    function renderItemsList() {
+      const tbody = document.getElementById("bill-items-rows");
+      if (BILL_ITEMS.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="empty">No items added to invoice.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = BILL_ITEMS.map((item, index) => {
+        const delBtn = (PROFILE.role === 'admin' || PROFILE.role === 'reception') 
+          ? `<button class="btn small danger" onclick="handleRemoveItem('${escapeHtml(item.id)}')" style="padding: 2px 6px;">✕</button>`
+          : "";
+          
+        return `
+          <tr>
+            <td><strong>${escapeHtml(item.item_name)}</strong></td>
+            <td><small class="muted">${escapeHtml(item.category)}</small></td>
+            <td style="text-align:right">${Number(item.quantity)}</td>
+            <td style="text-align:right">₹${Number(item.unit_price).toFixed(2)}</td>
+            <td style="text-align:right"><strong>₹${Number(item.total_price).toFixed(2)}</strong></td>
+            <td class="no-print" style="width: 40px; text-align: center;">${delBtn}</td>
+          </tr>`;
+      }).join("");
+    }
+
+    function calculateTotals() {
+      // Line items sum
+      const subtotal = BILL_ITEMS.reduce((sum, item) => sum + Number(item.total_price), 0);
+      document.getElementById("calc-subtotal").textContent = `₹${subtotal.toFixed(2)}`;
+
+      const discount = Number(document.getElementById("calc-discount").value || 0);
+      const taxRate = Number(document.getElementById("calc-tax-rate").value || 0);
+
+      const taxable = Math.max(0, subtotal - discount);
+      const tax = taxable * (taxRate / 100);
+      const grandTotal = taxable + tax;
+
+      document.getElementById("calc-total").textContent = `₹${grandTotal.toFixed(2)}`;
+
+      // Calculate Patient Portion Due
+      const isInsurance = document.getElementById("ins-type").value !== "Self-Pay";
+      const approvalStatus = document.getElementById("ins-status").value;
+      const approvedAmt = Number(document.getElementById("ins-approved-amount").value || 0);
+      const copay = Number(document.getElementById("ins-copay-amount").value || 0);
+
+      let patientDue = grandTotal;
+      if (isInsurance) {
+        if (approvalStatus === "Approved") {
+          // If approved, patient only pays co-pay + any remaining unapproved portion of total
+          patientDue = copay + Math.max(0, grandTotal - approvedAmt - copay);
+        } else if (approvalStatus === "Rejected") {
+          // If rejected, patient pays full grand total
+          patientDue = grandTotal;
+        } else {
+          // If claim is pending, we assume patient portion equals co-pay or outstanding
+          patientDue = copay;
+        }
+      }
+
+      const outstanding = Math.max(0, patientDue - Number(BILL.amount_paid || 0));
+      document.getElementById("pay-patient-due").textContent = `₹${outstanding.toFixed(2)}`;
+      
+      return {
+        subtotal,
+        discount,
+        tax,
+        grandTotal,
+        outstanding
+      };
+    }
+
+    async function handleAddItem(e) {
+      e.preventDefault();
+      const selId = document.getElementById("select-catalog").value;
+      const qty = Number(document.getElementById("input-qty").value);
+      const price = Number(document.getElementById("input-price").value);
+
+      if (!selId) return;
+      if (qty <= 0 || price < 0) {
+        alert("Invalid quantity or price.");
+        return;
+      }
+
+      let name = "";
+      let category = "Other";
+
+      if (selId === "custom") {
+        name = prompt("Enter Custom Item Name:");
+        if (!name) return;
+        category = prompt("Enter Category (Consultation, Ward/Bed, Lab Test, Procedure, Pharmacy, Other):") || "Other";
+      } else {
+        const item = CATALOG.find(c => c.id === selId);
+        name = item.item_name;
+        category = item.category;
+      }
+
+      const total = qty * price;
+
+      const btn = document.getElementById("btn-add-item");
+      btn.disabled = true;
+
+      try {
+        const { data, error } = await window.sb
+          .from("bill_items")
+          .insert({
+            bill_id: BILL_ID,
+            item_name: name,
+            category,
+            quantity: qty,
+            unit_price: price,
+            total_price: total
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
+        BILL_ITEMS.push(data);
+        renderItemsList();
+        const totals = calculateTotals();
+        await saveFinancialTotals(totals.subtotal, totals.discount, totals.tax, totals.grandTotal);
+      } catch (err) {
+        alert(err.message || "Failed to add item.");
+      } finally {
+        btn.disabled = false;
+        document.getElementById("select-catalog").value = "";
+        document.getElementById("input-qty").value = "1";
+        document.getElementById("input-price").value = "0.00";
+      }
+    }
+
+    async function handleRemoveItem(itemId) {
+      if (!confirm("Are you sure you want to remove this item from the invoice?")) return;
+      try {
+        const { error } = await window.sb
+          .from("bill_items")
+          .delete()
+          .eq("id", itemId);
+        
+        if (error) throw error;
+        BILL_ITEMS = BILL_ITEMS.filter(item => item.id !== itemId);
+        renderItemsList();
+        const totals = calculateTotals();
+        await saveFinancialTotals(totals.subtotal, totals.discount, totals.tax, totals.grandTotal);
+      } catch (err) {
+        alert(err.message || "Failed to delete item.");
+      }
+    }
+
+    async function saveFinancialTotals(sub, disc, tax, total) {
+      // Trigger status adjustment
+      const currentPaid = Number(BILL.amount_paid || 0);
+      let status = "Unpaid";
+      if (currentPaid >= total) status = "Paid";
+      else if (currentPaid > 0) status = "Partially Paid";
+
+      const { error } = await window.sb
+        .from("bills")
+        .update({
+          subtotal: sub,
+          discount_amount: disc,
+          tax_amount: tax,
+          total_amount: total,
+          payment_status: status
+        })
+        .eq("id", BILL_ID);
+
+      if (error) {
+        console.error("Failed to save financial totals to DB", error);
+      } else {
+        BILL.subtotal = sub;
+        BILL.discount_amount = disc;
+        BILL.tax_amount = tax;
+        BILL.total_amount = total;
+        BILL.payment_status = status;
+        
+        // Update header badge
+        const badge = document.getElementById("bill-status-badge");
+        badge.textContent = status;
+        badge.className = "badge payment " + (status === "Paid" ? "discharged" : status === "Partially Paid" ? "admitted" : "role");
+      }
+    }
+
+    async function saveFinancialChanges() {
+      const totals = calculateTotals();
+      await saveFinancialTotals(totals.subtotal, totals.discount, totals.tax, totals.grandTotal);
+    }
+
+    async function handleInsuranceSubmit(e) {
+      e.preventDefault();
+      const type = document.getElementById("ins-type").value;
+      
+      let payload = {
+        insurance_type: type,
+        insurance_provider: null,
+        insurance_policy_number: null,
+        insurance_preauth_id: null,
+        insurance_approval_status: "Pending",
+        insurance_approved_amount: 0.00,
+        patient_copay_amount: 0.00
+      };
+
+      if (type !== "Self-Pay") {
+        payload.insurance_provider = document.getElementById("ins-provider").value;
+        payload.insurance_policy_number = document.getElementById("ins-policy").value.trim() || null;
+        payload.insurance_preauth_id = document.getElementById("ins-preauth").value.trim() || null;
+        payload.insurance_approval_status = document.getElementById("ins-status").value;
+        payload.insurance_approved_amount = Number(document.getElementById("ins-approved-amount").value || 0);
+        payload.patient_copay_amount = Number(document.getElementById("ins-copay-amount").value || 0);
+      }
+
+      const btn = document.getElementById("btn-save-insurance");
+      btn.disabled = true;
+      btn.textContent = "Saving...";
+
+      try {
+        const { error } = await window.sb
+          .from("bills")
+          .update(payload)
+          .eq("id", BILL_ID);
+
+        if (error) throw error;
+        
+        // Update local object
+        Object.assign(BILL, payload);
+        
+        showMsg(document.getElementById("msg"), "success", "Insurance settings updated successfully.");
+        calculateTotals();
+      } catch (err) {
+        showMsg(document.getElementById("msg"), "error", err.message || "Failed to update insurance.");
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Update Insurance Details";
+      }
+    }
+
+    async function handlePaymentSubmit(e) {
+      e.preventDefault();
+      const amount = Number(document.getElementById("pay-amount-input").value);
+      const mode = document.getElementById("pay-mode").value;
+      const ref = document.getElementById("pay-ref").value.trim();
+
+      if (amount <= 0) {
+        alert("Payment amount must be greater than 0.");
+        return;
+      }
+
+      const btn = document.getElementById("btn-record-payment");
+      btn.disabled = true;
+      btn.textContent = "Recording Payment...";
+
+      try {
+        const newPaid = Number(BILL.amount_paid || 0) + amount;
+        const total = Number(BILL.total_amount || 0);
+        
+        let status = "Unpaid";
+        if (newPaid >= total) status = "Paid";
+        else if (newPaid > 0) status = "Partially Paid";
+
+        const { error } = await window.sb
+          .from("bills")
+          .update({
+            amount_paid: newPaid,
+            payment_status: status,
+            payment_mode: mode,
+            notes: ref ? `Paid: ₹${amount} via ${mode} (Ref: ${ref})` : BILL.notes
+          })
+          .eq("id", BILL_ID);
+
+        if (error) throw error;
+
+        BILL.amount_paid = newPaid;
+        BILL.payment_status = status;
+        BILL.payment_mode = mode;
+
+        document.getElementById("pay-amount-realized").textContent = `₹${newPaid.toFixed(2)}`;
+        document.getElementById("pay-amount-input").value = "0.00";
+        document.getElementById("pay-ref").value = "";
+
+        const badge = document.getElementById("bill-status-badge");
+        badge.textContent = status;
+        badge.className = "badge payment " + (status === "Paid" ? "discharged" : status === "Partially Paid" ? "admitted" : "role");
+
+        showMsg(document.getElementById("msg"), "success", `Payment of ₹${amount.toFixed(2)} recorded successfully.`);
+        calculateTotals();
+      } catch (err) {
+        showMsg(document.getElementById("msg"), "error", err.message || "Failed to record payment.");
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Record Receipt Payment";
+      }
+    }
+
+    async function handleImportLabs() {
+      if (INVESTIGATIONS.length === 0) {
+        alert("No investigations logged for this inpatient admission.");
+        return;
+      }
+
+      // Filter out investigations that are already added as line items
+      const existingNames = BILL_ITEMS.filter(item => item.category === "Lab Test").map(item => item.item_name.toLowerCase());
+      const newInvs = INVESTIGATIONS.filter(inv => !existingNames.includes(inv.test_name.toLowerCase()));
+
+      if (newInvs.length === 0) {
+        alert("All laboratory investigations have already been added to the invoice.");
+        return;
+      }
+
+      if (!confirm(`Import ${newInvs.length} logged investigations into invoice items?`)) return;
+
+      const importBtn = document.getElementById("btn-import-labs");
+      importBtn.disabled = true;
+      importBtn.textContent = "Importing...";
+
+      const standardLabFee = 250.00; // Flat standard fee per routine test
+
+      try {
+        const payload = newInvs.map(inv => ({
+          bill_id: BILL_ID,
+          item_name: inv.test_name,
+          category: "Lab Test",
+          quantity: 1,
+          unit_price: standardLabFee,
+          total_price: standardLabFee
+        }));
+
+        const { data, error } = await window.sb
+          .from("bill_items")
+          .insert(payload)
+          .select();
+
+        if (error) throw error;
+
+        BILL_ITEMS = BILL_ITEMS.concat(data);
+        renderItemsList();
+        const totals = calculateTotals();
+        await saveFinancialTotals(totals.subtotal, totals.discount, totals.tax, totals.grandTotal);
+        
+        showMsg(document.getElementById("msg"), "success", `Successfully imported ${data.length} lab tests.`);
+      } catch (err) {
+        showMsg(document.getElementById("msg"), "error", err.message || "Failed to import lab tests.");
+      } finally {
+        importBtn.disabled = false;
+        importBtn.textContent = "Import Lab Tests";
+      }
+    }
+
+    async function handleDeleteBill() {
+      if (!confirm("Are you sure you want to permanently delete this invoice and all its line items? This cannot be undone.")) return;
+      
+      const btn = document.getElementById("btn-delete-bill");
+      btn.disabled = true;
+      btn.textContent = "Deleting...";
+
+      try {
+        const { error } = await window.sb
+          .from("bills")
+          .delete()
+          .eq("id", BILL_ID);
+        
+        if (error) throw error;
+        window.location.href = "billing.html";
+      } catch (err) {
+        showMsg(document.getElementById("msg"), "error", err.message || "Failed to delete bill.");
+        btn.disabled = false;
+        btn.textContent = "Delete Invoice";
+      }
+    }
+  </script>
+</body>
+</html>

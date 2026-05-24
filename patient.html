@@ -66,6 +66,27 @@
       </form>
     </div>
 
+    <!-- ===== Billing list ===== -->
+    <div class="card">
+      <h2>Billing & Invoices
+        <button class="btn small" id="new-op-bill-btn" style="float:right">+ New OP Bill</button>
+      </h2>
+      <table class="data" id="bill-tbl">
+        <thead>
+          <tr>
+            <th>Bill No</th>
+            <th>Date</th>
+            <th>Type</th>
+            <th>Amount</th>
+            <th>Insurance / Scheme</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="bill-rows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody>
+      </table>
+    </div>
+
     <!-- ===== Admissions list ===== -->
     <div class="card">
       <h2>Admissions
@@ -150,6 +171,7 @@
           <div class="actions">
             <button type="submit" class="btn" id="adm-save">Save admission</button>
             <button type="button" class="btn secondary" id="adm-close">Close</button>
+            <button type="button" class="btn" id="adm-bill-btn" style="background:#0f8a6c;border-color:#0f8a6c">Manage IP Bill</button>
             <button type="button" class="btn danger" id="adm-delete" style="margin-left:auto">Delete admission</button>
           </div>
         </form>
@@ -180,12 +202,28 @@
 
   <!-- Modal for adding investigation -->
   <div id="inv-modal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.4);z-index:20;align-items:center;justify-content:center">
-    <form class="card" id="inv-form" style="width:100%;max-width:500px;margin:0;background:#fff">
+    <form class="card" id="inv-form" style="width:100%;max-width:550px;margin:0;background:#fff;max-height:90vh;overflow-y:auto">
       <h2 id="inv-form-title">Add investigation</h2>
-      <div class="form-grid">
+      
+      <div class="form-grid" style="margin-bottom:12px;">
+        <label class="field full">
+          <span>Proforma Template</span>
+          <select id="inv-template">
+            <option value="manual">Custom / Single Test</option>
+            <option value="cbc">Complete Blood Count (CBC)</option>
+            <option value="electrolytes">Serum Electrolytes</option>
+            <option value="rft">Renal Function Test (RFT)</option>
+            <option value="lft">Liver Function Test (LFT)</option>
+            <option value="diabetes">Diabetic Profile (Sugar/HbA1c)</option>
+            <option value="cardiac">Cardiac Profile (Troponin T)</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="form-grid" id="inv-single-test-fields">
         <label class="field full">
           <span>Test name *</span>
-          <input id="inv-test_name" required placeholder="e.g. Hemoglobin, CBC, X-Ray Chest" />
+          <input id="inv-test_name" required placeholder="e.g. Hemoglobin, X-Ray Chest" />
         </label>
         <label class="field">
           <span>Value</span>
@@ -199,6 +237,14 @@
           <span>Normal range</span>
           <input id="inv-normal_range" placeholder="e.g. 12-17 g/dL" />
         </label>
+      </div>
+
+      <!-- Dynamic proforma field grids -->
+      <div id="inv-proforma-fields" style="display:none; margin-bottom:14px;">
+        <!-- Filled dynamically by JavaScript -->
+      </div>
+
+      <div class="form-grid">
         <label class="field full">
           <span>Performed at</span>
           <input id="inv-performed_at" type="datetime-local" />
@@ -208,6 +254,7 @@
           <textarea id="inv-comments"></textarea>
         </label>
       </div>
+
       <div class="actions">
         <button type="submit" class="btn" id="inv-save">Save</button>
         <button type="button" class="btn secondary" id="inv-cancel">Cancel</button>
@@ -222,6 +269,7 @@
     let CURRENT_ADM = null;
     let INVESTIGATIONS = [];
     let EDITING_INV = null;
+    let BILLS = [];
 
     function getPatientId() {
       const params = new URLSearchParams(window.location.search);
@@ -241,6 +289,7 @@
       if (!id) { showMsg(document.getElementById("msg"), "error", "Missing patient id."); return; }
       await loadPatient(id);
       await loadAdmissions(id);
+      await loadBills(id);
       if (isNewParam()) {
         showMsg(document.getElementById("msg"), "success", "Patient registered. You can now add an admission below.");
       }
@@ -263,6 +312,12 @@
       }
       if (!canEditInvestigation(PROFILE.role)) {
         document.getElementById("inv-add").style.display = "none";
+      }
+      if (PROFILE.role !== "admin" && PROFILE.role !== "reception") {
+        const opBtn = document.getElementById("new-op-bill-btn");
+        if (opBtn) opBtn.style.display = "none";
+        const admBillBtn = document.getElementById("adm-bill-btn");
+        if (admBillBtn) admBillBtn.textContent = "View IP Bill";
       }
     }
 
@@ -326,6 +381,46 @@
           openAdmission(el.dataset.id);
         });
       });
+    }
+
+    async function loadBills(patientId) {
+      const { data, error } = await window.sb
+        .from("bills")
+        .select("*")
+        .eq("patient_id", patientId)
+        .order("billing_date", { ascending: false });
+      if (error) { console.error("Error loading bills", error); return; }
+      BILLS = data || [];
+      renderBillList();
+    }
+
+    function renderBillList() {
+      const tbody = document.getElementById("bill-rows");
+      if (BILLS.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" class="empty">No bills recorded.</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = BILLS.map((b) => {
+        let statusClass = "muted";
+        if (b.payment_status === "Paid") statusClass = "discharged";
+        else if (b.payment_status === "Partially Paid") statusClass = "admitted";
+        else if (b.payment_status === "Unpaid") statusClass = "role";
+
+        const insText = b.insurance_type === "Self-Pay" 
+          ? "Self-Pay" 
+          : `${b.insurance_provider || b.insurance_type}`;
+
+        return `
+          <tr>
+            <td><strong>${escapeHtml(b.bill_number)}</strong></td>
+            <td>${fmtDate(b.billing_date)}</td>
+            <td><span class="badge ${b.bill_type === 'IP' ? 'admitted' : 'role'}">${b.bill_type} Bill</span></td>
+            <td>₹${Number(b.total_amount).toFixed(2)}</td>
+            <td><small class="muted">${escapeHtml(insText)}</small></td>
+            <td><span class="badge ${statusClass}">${b.payment_status}</span></td>
+            <td><a class="btn small secondary" href="bill-detail.html?id=${encodeURIComponent(b.id)}">Open</a></td>
+          </tr>`;
+      }).join("");
     }
 
     async function openAdmission(id) {
@@ -399,6 +494,75 @@
       }
     }
 
+    const PROFORMA_TEMPLATES = {
+      cbc: [
+        { name: "Hemoglobin", units: "g/dL", normal: "12.0 - 16.0" },
+        { name: "Total WBC Count", units: "/cumm", normal: "4,000 - 11,000" },
+        { name: "Platelet Count", units: "Lakhs/cumm", normal: "1.5 - 4.5" },
+        { name: "Packed Cell Volume (PCV)", units: "%", normal: "36 - 48" }
+      ],
+      electrolytes: [
+        { name: "Serum Sodium (Na+)", units: "mEq/L", normal: "135 - 145" },
+        { name: "Serum Potassium (K+)", units: "mEq/L", normal: "3.5 - 5.0" },
+        { name: "Serum Chloride (Cl-)", units: "mEq/L", normal: "96 - 106" }
+      ],
+      rft: [
+        { name: "Blood Urea", units: "mg/dL", normal: "15 - 40" },
+        { name: "Serum Creatinine", units: "mg/dL", normal: "0.6 - 1.2" },
+        { name: "Serum Uric Acid", units: "mg/dL", normal: "3.5 - 7.2" }
+      ],
+      lft: [
+        { name: "Total Bilirubin", units: "mg/dL", normal: "0.2 - 1.2" },
+        { name: "SGOT (AST)", units: "U/L", normal: "5 - 40" },
+        { name: "SGPT (ALT)", units: "U/L", normal: "5 - 40" },
+        { name: "Alkaline Phosphatase (ALP)", units: "U/L", normal: "30 - 120" },
+        { name: "Serum Albumin", units: "g/dL", normal: "3.5 - 5.2" }
+      ],
+      diabetes: [
+        { name: "Fasting Blood Sugar (FBS)", units: "mg/dL", normal: "70 - 100" },
+        { name: "Post-Prandial Sugar (PPBS)", units: "mg/dL", normal: "< 140" },
+        { name: "Random Blood Sugar (RBS)", units: "mg/dL", normal: "70 - 140" },
+        { name: "HbA1c", units: "%", normal: "< 5.7" }
+      ],
+      cardiac: [
+        { name: "Troponin T (Trop-T)", units: "ng/mL", normal: "< 0.01" }
+      ]
+    };
+
+    function handleInvTemplateChange() {
+      const tpl = document.getElementById("inv-template").value;
+      const singleFields = document.getElementById("inv-single-test-fields");
+      const proformaFields = document.getElementById("inv-proforma-fields");
+      
+      if (tpl === "manual") {
+        singleFields.style.display = "grid";
+        document.getElementById("inv-test_name").required = true;
+        proformaFields.style.display = "none";
+        proformaFields.innerHTML = "";
+        return;
+      }
+      
+      singleFields.style.display = "none";
+      document.getElementById("inv-test_name").required = false;
+      
+      const fields = PROFORMA_TEMPLATES[tpl] || [];
+      proformaFields.innerHTML = `
+        <div style="font-size: 13px; font-weight: 600; color: var(--primary-dark); margin-bottom: 10px; border-bottom: 1px solid var(--border); padding-bottom: 4px;">
+          Panel: ${document.getElementById("inv-template").options[document.getElementById("inv-template").selectedIndex].text}
+        </div>
+        <div class="form-grid" id="proforma-inputs-grid">
+          ${fields.map((f, i) => `
+            <label class="field full" style="grid-column: span 2; display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 10px; align-items: center; border-bottom: 1px dashed #f1f5f9; padding-bottom: 6px; margin-bottom: 6px;">
+              <span style="font-weight: 600; font-size: 13px;">${escapeHtml(f.name)} <br/><small class="muted" style="font-weight: normal; font-size: 11px;">Normal: ${escapeHtml(f.normal)} ${escapeHtml(f.units)}</small></span>
+              <input type="text" class="proforma-value-input" data-name="${escapeHtml(f.name)}" data-units="${escapeHtml(f.units)}" data-normal="${escapeHtml(f.normal)}" placeholder="Value" style="padding: 4px 8px; font-size: 13px;" />
+              <span class="muted" style="font-size:12px; font-weight:500;">${escapeHtml(f.units)}</span>
+            </label>
+          `).join("")}
+        </div>
+      `;
+      proformaFields.style.display = "block";
+    }
+
     function openInvForm(invId) {
       EDITING_INV = invId ? INVESTIGATIONS.find((x) => x.id === invId) : null;
       const f = (id) => document.getElementById(id);
@@ -409,6 +573,18 @@
         return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
       };
       f("inv-form-title").textContent = EDITING_INV ? "Edit investigation" : "Add investigation";
+      
+      const tplSelect = document.getElementById("inv-template");
+      if (EDITING_INV) {
+        tplSelect.value = "manual";
+        tplSelect.disabled = true;
+      } else {
+        tplSelect.value = "manual";
+        tplSelect.disabled = false;
+      }
+      
+      handleInvTemplateChange();
+      
       f("inv-test_name").value     = EDITING_INV ? EDITING_INV.test_name : "";
       f("inv-test_value").value    = EDITING_INV ? (EDITING_INV.test_value || "") : "";
       f("inv-units").value         = EDITING_INV ? (EDITING_INV.units || "") : "";
@@ -518,32 +694,117 @@
       });
 
       // Investigation modal
+      document.getElementById("inv-template").addEventListener("change", handleInvTemplateChange);
       document.getElementById("inv-add").addEventListener("click", () => openInvForm(null));
       document.getElementById("inv-cancel").addEventListener("click", closeInvForm);
       document.getElementById("inv-form").addEventListener("submit", async (e) => {
         e.preventDefault();
         if (!CURRENT_ADM) return;
-        const payload = {
-          admission_id: CURRENT_ADM.id,
-          test_name: document.getElementById("inv-test_name").value.trim(),
-          test_value: document.getElementById("inv-test_value").value.trim() || null,
-          units: document.getElementById("inv-units").value.trim() || null,
-          normal_range: document.getElementById("inv-normal_range").value.trim() || null,
-          performed_at: document.getElementById("inv-performed_at").value
-            ? new Date(document.getElementById("inv-performed_at").value).toISOString()
-            : new Date().toISOString(),
-          comments: document.getElementById("inv-comments").value.trim() || null,
-          performed_by: PROFILE.id,
-        };
+        
+        const tpl = document.getElementById("inv-template").value;
+        const performed_at = document.getElementById("inv-performed_at").value
+          ? new Date(document.getElementById("inv-performed_at").value).toISOString()
+          : new Date().toISOString();
+        const comments = document.getElementById("inv-comments").value.trim() || null;
+        
         let res;
-        if (EDITING_INV) {
-          res = await window.sb.from("investigations").update(payload).eq("id", EDITING_INV.id);
+        
+        if (tpl !== "manual") {
+          const inputs = Array.from(document.querySelectorAll("#proforma-inputs-grid .proforma-value-input"));
+          const payloads = [];
+          inputs.forEach(input => {
+            const val = input.value.trim();
+            if (val) {
+              payloads.push({
+                admission_id: CURRENT_ADM.id,
+                test_name: input.dataset.name,
+                test_value: val,
+                units: input.dataset.units || null,
+                normal_range: input.dataset.normal || null,
+                performed_at: performed_at,
+                comments: comments,
+                performed_by: PROFILE.id
+              });
+            }
+          });
+          
+          if (payloads.length === 0) {
+            alert("Please enter at least one test value in the panel.");
+            return;
+          }
+          
+          res = await window.sb.from("investigations").insert(payloads);
         } else {
-          res = await window.sb.from("investigations").insert(payload);
+          const payload = {
+            admission_id: CURRENT_ADM.id,
+            test_name: document.getElementById("inv-test_name").value.trim(),
+            test_value: document.getElementById("inv-test_value").value.trim() || null,
+            units: document.getElementById("inv-units").value.trim() || null,
+            normal_range: document.getElementById("inv-normal_range").value.trim() || null,
+            performed_at: performed_at,
+            comments: comments,
+            performed_by: PROFILE.id,
+          };
+          
+          if (EDITING_INV) {
+            res = await window.sb.from("investigations").update(payload).eq("id", EDITING_INV.id);
+          } else {
+            res = await window.sb.from("investigations").insert(payload);
+          }
         }
+        
         if (res.error) { showMsg(document.getElementById("msg"), "error", res.error.message); return; }
         closeInvForm();
         await loadInvestigations(CURRENT_ADM.id);
+      });
+
+      // Quick OP Bill
+      document.getElementById("new-op-bill-btn").addEventListener("click", async () => {
+        const billNo = await generateBillNumber("OP");
+        const { data, error } = await window.sb
+          .from("bills")
+          .insert({
+            patient_id: PATIENT.id,
+            bill_type: "OP",
+            bill_number: billNo,
+            billing_date: new Date().toISOString(),
+            created_by: PROFILE.id
+          })
+          .select()
+          .single();
+        if (error) { showMsg(document.getElementById("msg"), "error", error.message); return; }
+        window.location.href = `bill-detail.html?id=${encodeURIComponent(data.id)}`;
+      });
+
+      // Manage IP Bill
+      document.getElementById("adm-bill-btn").addEventListener("click", async () => {
+        if (!CURRENT_ADM) return;
+        const { data: existingBill, error: checkErr } = await window.sb
+          .from("bills")
+          .select("id")
+          .eq("admission_id", CURRENT_ADM.id)
+          .maybeSingle();
+        if (checkErr) { showMsg(document.getElementById("msg"), "error", checkErr.message); return; }
+        
+        if (existingBill) {
+          window.location.href = `bill-detail.html?id=${encodeURIComponent(existingBill.id)}`;
+        } else {
+          const billNo = await generateBillNumber("IP");
+          const { data: newBill, error: insertErr } = await window.sb
+            .from("bills")
+            .insert({
+              patient_id: PATIENT.id,
+              admission_id: CURRENT_ADM.id,
+              bill_type: "IP",
+              bill_number: billNo,
+              billing_date: new Date().toISOString(),
+              created_by: PROFILE.id
+            })
+            .select()
+            .single();
+          if (insertErr) { showMsg(document.getElementById("msg"), "error", insertErr.message); return; }
+          window.location.href = `bill-detail.html?id=${encodeURIComponent(newBill.id)}`;
+        }
       });
     }
   </script>

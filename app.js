@@ -147,6 +147,7 @@ async function renderTopbar(activePage) {
     <nav>
       <a href="dashboard.html" data-page="dashboard">Patients</a>
       <a href="new-patient.html" data-page="new-patient">New Patient</a>
+      <a href="billing.html" data-page="billing">Billing</a>
       <a href="admin.html" data-page="admin">Staff</a>
     </nav>
     <div class="spacer"></div>
@@ -163,3 +164,20 @@ async function renderTopbar(activePage) {
   $('#topbar-logout').addEventListener("click", signOut);
   return profile;
 }
+
+// ---------- Billing helpers ----------
+async function generateBillNumber(type) {
+  const year = new Date().getFullYear();
+  const prefix = `${type === 'IP' ? 'IPB' : 'OPB'}-${year}-`;
+  const { count, error } = await window.sb
+    .from("bills")
+    .select("*", { count: "exact", head: true })
+    .ilike("bill_number", `${prefix}%`);
+  
+  if (error) {
+    console.error("Failed to count bills", error);
+  }
+  const nextSeq = String((count || 0) + 1).padStart(4, "0");
+  return `${prefix}${nextSeq}`;
+}
+
