@@ -1,156 +1,344 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <title>Patients - Ponugoti Hospital</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link rel="stylesheet" href="style.css" />
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Dashboard – Ponugoti Hospital</title>
+  <link rel="stylesheet" href="style.css"/>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js"></script>
   <script src="app.js"></script>
 </head>
 <body>
-  <div class="container" id="page" style="display:none">
-    <div class="page-title">
-      <h1>Patients</h1>
-      <span class="subtitle" id="count"></span>
-      <div style="flex:1"></div>
-      <a class="btn" href="new-patient.html" id="new-pt-btn">+ New Patient</a>
-      <button class="btn secondary" id="backup-btn" title="Download a JSON backup of all records">Download backup</button>
+<div class="container" id="page">
+
+  <div class="page-title">
+    <div>
+      <h1>Dashboard</h1>
+      <div class="subtitle" id="greet-line">Loading…</div>
     </div>
-
-    <div id="msg"></div>
-
-    <div class="searchbar">
-      <input id="q" type="search" placeholder="Search by name, MRN, or phone..." autofocus />
-    </div>
-
-    <div class="card" style="padding:0;overflow:hidden">
-      <table class="data" id="tbl">
-        <thead>
-          <tr>
-            <th>MRN</th>
-            <th>Name</th>
-            <th>Age / Sex</th>
-            <th>Phone</th>
-            <th>Latest Admission</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody id="rows"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
-      </table>
+    <div style="margin-left:auto;display:flex;gap:10px;flex-wrap:wrap">
+      <a href="new-patient.html" class="btn">
+        <i class="ti ti-user-plus"></i> New Patient
+      </a>
+      <button class="btn secondary" id="backup-btn">
+        <i class="ti ti-download"></i> Export
+      </button>
     </div>
   </div>
 
-  <script>
-    let ALL_PATIENTS = [];
-    let LATEST_ADMISSIONS = {}; // patient_id -> latest admission row
+  <!-- Stats -->
+  <div class="stats-grid">
+    <div class="stat">
+      <i class="stat-icon-bg ti ti-users"></i>
+      <span>Total Patients</span>
+      <strong id="s-patients">—</strong>
+    </div>
+    <div class="stat">
+      <i class="stat-icon-bg ti ti-bed"></i>
+      <span>Active Admissions</span>
+      <strong id="s-admissions">—</strong>
+    </div>
+    <div class="stat">
+      <i class="stat-icon-bg ti ti-stethoscope"></i>
+      <span>OP Visits Today</span>
+      <strong id="s-opvisits">—</strong>
+    </div>
+    <div class="stat">
+      <i class="stat-icon-bg ti ti-receipt"></i>
+      <span>Pending Bills</span>
+      <strong id="s-pending">—</strong>
+    </div>
+  </div>
 
-    (async () => {
-      const user = await requireAuth();
-      if (!user) return;
-      const profile = await renderTopbar("dashboard");
-      document.getElementById("page").style.display = "";
-      if (!canEditPatient(profile.role)) {
-        document.getElementById("new-pt-btn").style.display = "none";
-      }
-      document.getElementById("backup-btn").addEventListener("click", downloadBackup);
-      document.getElementById("q").addEventListener("input", render);
-      await loadAll();
-    })();
+  <div class="two-col">
+    <!-- Patient list -->
+    <div class="card">
+      <h2>
+        <i class="ti ti-users" style="color:var(--primary)"></i> Patient Registry
+        <span class="section-actions">
+          <a href="new-patient.html" class="btn small">
+            <i class="ti ti-plus"></i> Add
+          </a>
+        </span>
+      </h2>
 
-    async function loadAll() {
-      const msg = document.getElementById("msg");
-      const { data: patients, error: pErr } = await window.sb
-        .from("patients")
-        .select("id, mrn, full_name, dob, sex, phone, created_at")
-        .order("created_at", { ascending: false });
-      if (pErr) { showMsg(msg, "error", pErr.message); return; }
-      ALL_PATIENTS = patients || [];
+      <div class="searchbar">
+        <input type="search" id="search-input" placeholder="Search by name, MRN or phone…"/>
+        <select id="filter-sex">
+          <option value="">All genders</option>
+          <option value="M">Male</option>
+          <option value="F">Female</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
 
-      const { data: adms } = await window.sb
-        .from("admissions")
-        .select("id, patient_id, admission_date, discharge_date")
-        .order("admission_date", { ascending: false });
-      LATEST_ADMISSIONS = {};
-      (adms || []).forEach((a) => {
-        if (!LATEST_ADMISSIONS[a.patient_id]) LATEST_ADMISSIONS[a.patient_id] = a;
-      });
+      <div id="msg-area"></div>
 
-      document.getElementById("count").textContent = `(${ALL_PATIENTS.length})`;
-      render();
+      <div class="table-wrap">
+        <table class="data">
+          <thead>
+            <tr>
+              <th>Patient</th>
+              <th>MRN</th>
+              <th>Age / Sex</th>
+              <th>Phone</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="patient-tbody">
+            <tr><td colspan="5" class="empty"><i class="ti ti-loader-2"></i> Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;flex-wrap:wrap;gap:8px">
+        <span id="page-info" style="font-size:13px;color:var(--muted)"></span>
+        <div style="display:flex;gap:8px">
+          <button class="btn secondary small" id="prev-btn" disabled>
+            <i class="ti ti-chevron-left"></i> Prev
+          </button>
+          <button class="btn secondary small" id="next-btn" disabled>
+            Next <i class="ti ti-chevron-right"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right panel -->
+    <div class="stack">
+      <!-- Recent admissions -->
+      <div class="card">
+        <h2><i class="ti ti-bed" style="color:var(--teal)"></i> Active Admissions</h2>
+        <div class="table-wrap">
+          <table class="data">
+            <thead>
+              <tr><th>Patient</th><th>Ward</th><th>Since</th></tr>
+            </thead>
+            <tbody id="admit-tbody">
+              <tr><td colspan="3" class="empty">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Quick links -->
+      <div class="card">
+        <h2><i class="ti ti-bolt" style="color:var(--warning)"></i> Quick Actions</h2>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <a href="billing.html" class="btn secondary" style="justify-content:flex-start;gap:10px">
+            <i class="ti ti-receipt" style="font-size:18px;color:var(--primary)"></i>
+            <span>Billing</span>
+          </a>
+          <a href="insurance.html" class="btn secondary" style="justify-content:flex-start;gap:10px">
+            <i class="ti ti-shield-check" style="font-size:18px;color:var(--teal)"></i>
+            <span>Insurance</span>
+          </a>
+          <a href="new-patient.html" class="btn secondary" style="justify-content:flex-start;gap:10px">
+            <i class="ti ti-user-plus" style="font-size:18px;color:var(--success)"></i>
+            <span>New Patient</span>
+          </a>
+          <a href="admin.html" class="btn secondary" style="justify-content:flex-start;gap:10px">
+            <i class="ti ti-users" style="font-size:18px;color:var(--warning)"></i>
+            <span>Staff</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- Pending bills -->
+      <div class="card">
+        <h2><i class="ti ti-clock" style="color:var(--danger)"></i> Pending Invoices</h2>
+        <div class="table-wrap">
+          <table class="data">
+            <thead>
+              <tr><th>Patient</th><th>Invoice</th><th class="money">Balance</th></tr>
+            </thead>
+            <tbody id="pending-tbody">
+              <tr><td colspan="3" class="empty">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(async () => {
+  const user = await requireAuth();
+  if (!user) return;
+
+  const profile = await renderTopbar('dashboard');
+
+  // Greeting
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  const firstName = profile ? profile.full_name.split(' ')[0] : '';
+  document.getElementById('greet-line').textContent =
+    `${greeting}, ${firstName}! Here's today's overview.`;
+
+  const today = new Date().toISOString().slice(0, 10);
+
+  // -- Stats --
+  async function loadStats() {
+    const [ptRes, admRes, opRes, billRes] = await Promise.allSettled([
+      window.sb.from('patients').select('id', { count: 'exact', head: true }),
+      window.sb.from('admissions').select('id', { count: 'exact', head: true }).is('discharge_date', null),
+      window.sb.from('op_visits').select('id', { count: 'exact', head: true }).gte('visit_date', today + 'T00:00:00').lte('visit_date', today + 'T23:59:59'),
+      window.sb.from('invoices').select('id', { count: 'exact', head: true }).in('status', ['Pending', 'Partially Paid']),
+    ]);
+    const v = (r) => r.status === 'fulfilled' ? (r.value.count ?? 0) : '—';
+    document.getElementById('s-patients').textContent   = v(ptRes);
+    document.getElementById('s-admissions').textContent = v(admRes);
+    document.getElementById('s-opvisits').textContent   = v(opRes);
+    document.getElementById('s-pending').textContent    = v(billRes);
+  }
+
+  // -- Patient list --
+  const PAGE_SIZE = 12;
+  let page = 0;
+  let totalCount = 0;
+  let searchQ = '';
+  let filterSex = '';
+
+  async function loadPatients() {
+    const tbody = document.getElementById('patient-tbody');
+    tbody.innerHTML = `<tr><td colspan="5" class="empty"><i class="ti ti-loader-2"></i> Loading…</td></tr>`;
+    const from = page * PAGE_SIZE;
+    const to   = from + PAGE_SIZE - 1;
+
+    let q = window.sb.from('patients')
+      .select('id,mrn,full_name,dob,sex,phone', { count: 'exact' })
+      .order('created_at', { ascending: false })
+      .range(from, to);
+
+    if (searchQ) {
+      q = q.or(`full_name.ilike.%${searchQ}%,mrn.ilike.%${searchQ}%,phone.ilike.%${searchQ}%`);
     }
+    if (filterSex) q = q.eq('sex', filterSex);
 
-    function render() {
-      const q = document.getElementById("q").value.trim().toLowerCase();
-      const rows = document.getElementById("rows");
-      const filtered = ALL_PATIENTS.filter((p) => {
-        if (!q) return true;
-        return (
-          (p.full_name || "").toLowerCase().includes(q) ||
-          (p.mrn || "").toLowerCase().includes(q) ||
-          (p.phone || "").toLowerCase().includes(q)
-        );
-      });
-      if (filtered.length === 0) {
-        rows.innerHTML = `<tr><td colspan="6" class="empty">No patients found.</td></tr>`;
-        return;
-      }
-      rows.innerHTML = filtered.map((p) => {
-        const adm = LATEST_ADMISSIONS[p.id];
-        const status = !adm
-          ? `<span class="muted">—</span>`
-          : adm.discharge_date
-            ? `<span class="badge discharged">Discharged ${fmtDate(adm.discharge_date)}</span>`
-            : `<span class="badge admitted">Admitted</span>`;
-        const admDate = adm ? fmtDate(adm.admission_date) : "—";
-        const age = p.dob ? `${ageFromDob(p.dob)}y` : "";
-        return `
-          <tr class="clickable" data-id="${escapeHtml(p.id)}">
-            <td><strong>${escapeHtml(p.mrn)}</strong></td>
-            <td>${escapeHtml(p.full_name)}</td>
-            <td>${age}${age && p.sex ? " / " : ""}${escapeHtml(p.sex || "")}</td>
-            <td>${escapeHtml(p.phone || "")}</td>
-            <td>${admDate}</td>
-            <td>${status}</td>
-          </tr>`;
-      }).join("");
-      $$("#rows tr.clickable").forEach((tr) => {
-        tr.addEventListener("click", () => {
-          window.location.href = `patient.html?id=${encodeURIComponent(tr.dataset.id)}`;
-        });
-      });
+    const { data, error, count } = await q;
+    if (error) {
+      tbody.innerHTML = `<tr><td colspan="5" class="empty">${escapeHtml(error.message)}</td></tr>`;
+      return;
     }
+    totalCount = count || 0;
+    if (!data || data.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="5" class="empty">No patients found.</td></tr>`;
+      updatePager();
+      return;
+    }
+    tbody.innerHTML = data.map(p => {
+      const initials = getInitials(p.full_name);
+      const age      = ageFromDob(p.dob);
+      const ageSex   = [age ? age + 'y' : '', p.sex].filter(Boolean).join(' / ');
+      return `
+        <tr class="clickable" onclick="window.location='patient.html?id=${p.id}'">
+          <td>
+            <div class="pt-cell">
+              <div class="pt-avatar">${escapeHtml(initials)}</div>
+              <div>
+                <div class="pt-name">${escapeHtml(p.full_name)}</div>
+              </div>
+            </div>
+          </td>
+          <td><code style="font-size:12px;color:var(--muted)">${escapeHtml(p.mrn)}</code></td>
+          <td>${escapeHtml(ageSex) || '<span class="muted">—</span>'}</td>
+          <td>${escapeHtml(p.phone || '—')}</td>
+          <td><span class="badge">Registered</span></td>
+        </tr>`;
+    }).join('');
+    updatePager();
+  }
 
-    async function downloadBackup() {
-      const btn = document.getElementById("backup-btn");
-      btn.disabled = true; btn.textContent = "Exporting…";
-      try {
-        const [p, a, i, pr] = await Promise.all([
-          window.sb.from("patients").select("*"),
-          window.sb.from("admissions").select("*"),
-          window.sb.from("investigations").select("*"),
-          window.sb.from("profiles").select("id, full_name, role"),
-        ]);
-        const blob = new Blob([JSON.stringify({
-          exported_at: new Date().toISOString(),
-          patients: p.data || [],
-          admissions: a.data || [],
-          investigations: i.data || [],
-          profiles: pr.data || [],
-        }, null, 2)], { type: "application/json" });
-        const url = URL.createObjectURL(blob);
-        const a2 = document.createElement("a");
-        const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
-        a2.href = url;
-        a2.download = `ponugoti-hospital-backup-${stamp}.json`;
-        document.body.appendChild(a2); a2.click(); a2.remove();
-        URL.revokeObjectURL(url);
-      } catch (e) {
-        showMsg(document.getElementById("msg"), "error", e.message || "Backup failed.");
-      }
-      btn.disabled = false; btn.textContent = "Download backup";
+  function updatePager() {
+    const total = Math.ceil(totalCount / PAGE_SIZE);
+    document.getElementById('page-info').textContent =
+      totalCount ? `Showing ${page * PAGE_SIZE + 1}–${Math.min((page+1)*PAGE_SIZE, totalCount)} of ${totalCount}` : '';
+    document.getElementById('prev-btn').disabled = page === 0;
+    document.getElementById('next-btn').disabled = page >= total - 1;
+  }
+
+  document.getElementById('prev-btn').addEventListener('click', () => { page--; loadPatients(); });
+  document.getElementById('next-btn').addEventListener('click', () => { page++; loadPatients(); });
+
+  let debounce;
+  document.getElementById('search-input').addEventListener('input', e => {
+    clearTimeout(debounce);
+    debounce = setTimeout(() => { searchQ = e.target.value.trim(); page = 0; loadPatients(); }, 300);
+  });
+  document.getElementById('filter-sex').addEventListener('change', e => {
+    filterSex = e.target.value; page = 0; loadPatients();
+  });
+
+  // -- Active admissions --
+  async function loadAdmissions() {
+    const tbody = document.getElementById('admit-tbody');
+    const { data, error } = await window.sb
+      .from('admissions')
+      .select('id, ward, admission_date, patients(full_name)')
+      .is('discharge_date', null)
+      .order('admission_date', { ascending: false })
+      .limit(6);
+    if (error || !data || data.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="3" class="empty">No active admissions.</td></tr>`;
+      return;
     }
-  </script>
+    tbody.innerHTML = data.map(a => `
+      <tr class="clickable" onclick="window.location='patient.html?id=${a.patients?.id || ''}'">
+        <td><span class="pt-name">${escapeHtml(a.patients?.full_name || '—')}</span></td>
+        <td>${escapeHtml(a.ward || '—')}</td>
+        <td style="font-size:13px;color:var(--muted)">${fmtDate(a.admission_date)}</td>
+      </tr>`).join('');
+  }
+
+  // -- Pending invoices --
+  async function loadPending() {
+    const tbody = document.getElementById('pending-tbody');
+    const { data, error } = await window.sb
+      .from('invoices')
+      .select('id, invoice_no, balance, patients(full_name)')
+      .in('status', ['Pending', 'Partially Paid'])
+      .order('invoice_date', { ascending: false })
+      .limit(6);
+    if (error || !data || data.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="3" class="empty">No pending invoices.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = data.map(inv => `
+      <tr class="clickable" onclick="window.location='billing.html?invoice=${inv.id}'">
+        <td>${escapeHtml(inv.patients?.full_name || '—')}</td>
+        <td><code style="font-size:12px;color:var(--muted)">${escapeHtml(inv.invoice_no)}</code></td>
+        <td class="money" style="color:var(--danger);font-weight:600">${fmtMoney(inv.balance)}</td>
+      </tr>`).join('');
+  }
+
+  // -- Export backup --
+  document.getElementById('backup-btn').addEventListener('click', async () => {
+    const btn = document.getElementById('backup-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ti ti-loader-2"></i> Exporting…';
+    try {
+      const { data } = await window.sb.from('patients')
+        .select('*').order('created_at', { ascending: false });
+      const json = JSON.stringify(data || [], null, 2);
+      const blob = new Blob([json], { type: 'application/json' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href = url;
+      a.download = `ponugoti-patients-${today}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="ti ti-download"></i> Export';
+    }
+  });
+
+  // Load everything in parallel
+  await Promise.all([loadStats(), loadPatients(), loadAdmissions(), loadPending()]);
+})();
+</script>
 </body>
 </html>

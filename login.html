@@ -1,58 +1,129 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <title>Sign in - Ponugoti Hospital</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link rel="stylesheet" href="style.css" />
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Sign In – Ponugoti Hospital</title>
+  <link rel="stylesheet" href="style.css"/>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css"/>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js"></script>
-  <script src="app.js"></script>
 </head>
 <body>
-  <div class="login-wrap">
-    <form class="login-card" id="login-form">
-      <h1>Ponugoti Hospital</h1>
-      <p class="subtitle">Staff sign in</p>
-      <div id="msg"></div>
-      <label class="field">
-        <span>Email</span>
-        <input id="email" type="email" autocomplete="username" required />
-      </label>
-      <label class="field">
-        <span>Password</span>
-        <input id="password" type="password" autocomplete="current-password" required />
-      </label>
-      <button type="submit" class="btn" id="submit-btn">Sign in</button>
-      <p class="muted" style="text-align:center;margin-top:14px;font-size:12px;">
-        Accounts are created by admin. Contact your administrator if you can't sign in.
-      </p>
-    </form>
+<div class="login-wrap">
+
+  <!-- Left branding panel -->
+  <div class="login-brand-panel">
+    <div class="login-cross">
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <rect x="9" y="2" width="6" height="20" rx="2"/>
+        <rect x="2" y="9" width="20" height="6" rx="2"/>
+      </svg>
+    </div>
+    <h1 id="brand-name">Ponugoti Hospital</h1>
+    <p class="tagline">Integrated hospital management — patients, admissions, billing, and insurance in one place.</p>
+    <div class="login-features">
+      <div class="login-feature">
+        <div class="login-feature-icon"><i class="ti ti-users"></i></div>
+        <span>Patient registry &amp; clinical records</span>
+      </div>
+      <div class="login-feature">
+        <div class="login-feature-icon"><i class="ti ti-receipt"></i></div>
+        <span>Billing, invoices &amp; payments</span>
+      </div>
+      <div class="login-feature">
+        <div class="login-feature-icon"><i class="ti ti-shield-check"></i></div>
+        <span>Insurance &amp; claims management</span>
+      </div>
+      <div class="login-feature">
+        <div class="login-feature-icon"><i class="ti ti-lock"></i></div>
+        <span>Role-based access control</span>
+      </div>
+    </div>
   </div>
 
-  <script>
-    (async () => {
-      // If already signed in, jump to dashboard.
-      const user = await getSessionUser();
-      if (user) { window.location.replace("dashboard.html"); return; }
-    })();
+  <!-- Right form panel -->
+  <div class="login-form-panel">
+    <div class="login-form-inner">
+      <h2>Welcome back</h2>
+      <p class="login-sub">Sign in to your staff account</p>
 
-    document.getElementById("login-form").addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const msg = document.getElementById("msg");
-      const btn = document.getElementById("submit-btn");
-      const email = document.getElementById("email").value.trim();
-      const password = document.getElementById("password").value;
-      clearMsg(msg);
-      btn.disabled = true; btn.textContent = "Signing in…";
-      const { error } = await window.sb.auth.signInWithPassword({ email, password });
-      btn.disabled = false; btn.textContent = "Sign in";
-      if (error) {
-        showMsg(msg, "error", error.message || "Sign in failed.");
-        return;
-      }
-      window.location.replace("dashboard.html");
-    });
-  </script>
+      <div id="msg-area"></div>
+
+      <label class="field">
+        Email address
+        <input type="email" id="email" placeholder="you@ponugoti.in" autocomplete="username"/>
+      </label>
+
+      <label class="field">
+        Password
+        <input type="password" id="password" placeholder="••••••••" autocomplete="current-password"/>
+      </label>
+
+      <button class="btn" id="login-btn">
+        <i class="ti ti-login"></i> Sign in
+      </button>
+
+      <p class="login-footer-note">
+        Contact your administrator to reset your password<br/>or create a new staff account.
+      </p>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(function () {
+  const cfg = window.PONUGOTI_CONFIG;
+  const client = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY, {
+    auth: { persistSession: true, autoRefreshToken: true, storageKey: 'ponugoti-hospital-auth' },
+  });
+
+  // Brand name
+  const brandEl = document.getElementById('brand-name');
+  if (brandEl && cfg.HOSPITAL_NAME) brandEl.textContent = cfg.HOSPITAL_NAME;
+
+  // Redirect if already logged in
+  client.auth.getSession().then(({ data }) => {
+    if (data.session) window.location.href = 'dashboard.html';
+  });
+
+  const btn      = document.getElementById('login-btn');
+  const emailEl  = document.getElementById('email');
+  const passEl   = document.getElementById('password');
+  const msgArea  = document.getElementById('msg-area');
+
+  function setMsg(kind, text) {
+    msgArea.innerHTML = `<div class="msg ${kind}">${text}</div>`;
+  }
+
+  async function doLogin() {
+    const email    = emailEl.value.trim();
+    const password = passEl.value;
+    if (!email || !password) { setMsg('error', 'Please enter your email and password.'); return; }
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i> Signing in…';
+
+    const { error } = await client.auth.signInWithPassword({ email, password });
+
+    if (error) {
+      setMsg('error', error.message || 'Sign-in failed. Please try again.');
+      btn.disabled = false;
+      btn.innerHTML = '<i class="ti ti-login"></i> Sign in';
+    } else {
+      window.location.href = 'dashboard.html';
+    }
+  }
+
+  btn.addEventListener('click', doLogin);
+  passEl.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+  emailEl.addEventListener('keydown', e => { if (e.key === 'Enter') passEl.focus(); });
+})();
+</script>
+
+<style>
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
 </body>
 </html>
