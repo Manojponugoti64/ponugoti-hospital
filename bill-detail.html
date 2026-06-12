@@ -8,6 +8,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js"></script>
   <script src="app.js"></script>
+  <script src="insurance-data.js"></script>
   <style>
     .billing-layout {
       display: grid;
@@ -309,21 +310,7 @@
     let INVESTIGATIONS = [];
     let PROFILE = null;
 
-    const INS_PROVIDERS = {
-      "Private Insurance": [
-        "Star Health Insurance",
-        "HDFC ERGO General Insurance",
-        "Niva Bupa Health Insurance",
-        "ICICI Lombard",
-        "Care Health Insurance"
-      ],
-      "State Scheme": [
-        "Dr. YSR Aarogyasri (AP)",
-        "Ayushman Bharat (PM-JAY)",
-        "Rajiv Gandhi Jeevandayee (Maharashtra)",
-        "Biju Swasthya Kalyan Yojana (Odisha)"
-      ]
-    };
+    // Provider/scheme directory comes from insurance-data.js (window.INS_PROVIDERS).
 
     function getBillId() {
       return new URLSearchParams(window.location.search).get("id");
@@ -440,7 +427,16 @@
         handleInsuranceTypeChange();
         
         if (BILL.insurance_type !== "Self-Pay") {
-          document.getElementById("ins-provider").value = BILL.insurance_provider || "";
+          // Keep providers saved under an older/renamed list entry selectable.
+          const provSelect = document.getElementById("ins-provider");
+          const saved = BILL.insurance_provider || "";
+          if (saved && ![...provSelect.options].some(o => o.value === saved)) {
+            const opt = document.createElement("option");
+            opt.value = saved;
+            opt.textContent = saved + " (saved)";
+            provSelect.prepend(opt);
+          }
+          provSelect.value = saved;
           document.getElementById("ins-policy").value = BILL.insurance_policy_number || "";
           document.getElementById("ins-preauth").value = BILL.insurance_preauth_id || "";
           document.getElementById("ins-status").value = BILL.insurance_approval_status || "Pending";

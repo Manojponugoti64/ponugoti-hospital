@@ -1,0 +1,367 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Insurance & Schemes - Ponugoti Hospital</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+  <script src="insurance-data.js"></script>
+  <style>
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .kpi-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      box-shadow: var(--shadow);
+      display: flex;
+      flex-direction: column;
+    }
+    .kpi-card .kpi-val {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--primary-dark);
+      margin: 8px 0 4px;
+    }
+    .kpi-card .kpi-label {
+      font-size: 13px;
+      color: var(--muted);
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+    }
+    .kpi-card .kpi-desc {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 8px;
+    }
+    .tab {
+      background: none;
+      border: none;
+      font: inherit;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--muted);
+      padding: 6px 12px;
+      cursor: pointer;
+      border-radius: 6px;
+      transition: background .15s, color .15s;
+    }
+    .tab.active, .tab:hover {
+      background: #e0e7ff;
+      color: #3730a3;
+    }
+    .empanel-card {
+      border-left: 4px solid var(--accent);
+    }
+    .chip {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 500;
+      background: #d1fae5;
+      color: #065f46;
+      margin: 2px 4px 2px 0;
+    }
+    .dir-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    @media (max-width: 800px) {
+      .dir-grid { grid-template-columns: 1fr; }
+      .kpi-grid { grid-template-columns: 1fr; }
+    }
+    .dir-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      max-height: 320px;
+      overflow-y: auto;
+    }
+    .dir-list li {
+      padding: 7px 4px;
+      border-bottom: 1px solid var(--border);
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .dir-list li:last-child { border-bottom: none; }
+  </style>
+</head>
+<body>
+  <div class="container" id="page" style="display:none">
+    <div class="page-title">
+      <h1>Insurance &amp; Schemes</h1>
+      <span class="subtitle" id="claim-count">…</span>
+      <div style="flex:1"></div>
+      <a class="btn" href="billing.html">Go to Billing</a>
+    </div>
+
+    <div id="msg"></div>
+
+    <!-- KPI Grid -->
+    <div class="kpi-grid">
+      <div class="kpi-card" style="border-left: 4px solid var(--warning)">
+        <span class="kpi-label">Pending Claims</span>
+        <div class="kpi-val" id="kpi-pending">—</div>
+        <span class="kpi-desc" id="kpi-pending-desc">Awaiting insurer / scheme approval</span>
+      </div>
+      <div class="kpi-card" style="border-left: 4px solid var(--accent)">
+        <span class="kpi-label">Approved Amount</span>
+        <div class="kpi-val" id="kpi-approved">—</div>
+        <span class="kpi-desc" id="kpi-approved-desc">Sanctioned by insurers / schemes</span>
+      </div>
+      <div class="kpi-card" style="border-left: 4px solid var(--danger)">
+        <span class="kpi-label">Rejected Claims</span>
+        <div class="kpi-val" id="kpi-rejected">—</div>
+        <span class="kpi-desc">Need review or resubmission</span>
+      </div>
+    </div>
+
+    <!-- Hospital empanelment -->
+    <div class="card empanel-card">
+      <h2>Hospital Empanelment</h2>
+      <div id="empanelment"></div>
+    </div>
+
+    <!-- Claims -->
+    <div class="page-title" style="margin-top: 28px">
+      <h1 style="font-size:18px">Claims</h1>
+    </div>
+
+    <div class="searchbar">
+      <input id="q" type="search" placeholder="Search by patient, bill number, provider, or scheme..." />
+    </div>
+
+    <div class="tabs">
+      <button class="tab active" data-filter="all">All</button>
+      <button class="tab" data-filter="Pending">Pending</button>
+      <button class="tab" data-filter="Approved">Approved</button>
+      <button class="tab" data-filter="Rejected">Rejected</button>
+    </div>
+
+    <div class="card" style="padding:0;overflow:hidden">
+      <table class="data" id="tbl">
+        <thead>
+          <tr>
+            <th>Bill #</th>
+            <th>Patient</th>
+            <th>Provider / Scheme</th>
+            <th>Type</th>
+            <th style="text-align:right">Billed (₹)</th>
+            <th style="text-align:right">Approved (₹)</th>
+            <th>Status</th>
+            <th>Date</th>
+          </tr>
+        </thead>
+        <tbody id="rows"><tr><td colspan="8" class="empty">Loading claims…</td></tr></tbody>
+      </table>
+    </div>
+
+    <!-- Directory -->
+    <div class="page-title" style="margin-top: 28px">
+      <h1 style="font-size:18px">Scheme &amp; Insurer Directory</h1>
+      <span class="subtitle" id="dir-count"></span>
+    </div>
+
+    <div class="searchbar">
+      <input id="dir-q" type="search" placeholder="Search schemes, insurers, TPAs..." />
+    </div>
+
+    <div class="dir-grid">
+      <div class="card">
+        <h2>Government / State Schemes</h2>
+        <ul class="dir-list" id="list-schemes"></ul>
+      </div>
+      <div class="card">
+        <h2>Private Insurers &amp; TPAs</h2>
+        <ul class="dir-list" id="list-private"></ul>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let BILLS = [];
+    let PATIENT_MAP = {};
+    let FILTER = "all";
+
+    (async () => {
+      const user = await requireAuth();
+      if (!user) return;
+      await renderTopbar("insurance");
+      document.getElementById("page").style.display = "";
+
+      renderEmpanelment();
+      renderDirectory("");
+
+      document.getElementById("q").addEventListener("input", renderClaims);
+      document.getElementById("dir-q").addEventListener("input", (e) => renderDirectory(e.target.value));
+      document.querySelectorAll(".tab").forEach((t) => {
+        t.addEventListener("click", () => {
+          document.querySelectorAll(".tab").forEach((x) => x.classList.remove("active"));
+          t.classList.add("active");
+          FILTER = t.dataset.filter;
+          renderClaims();
+        });
+      });
+
+      await loadClaims();
+    })();
+
+    async function loadClaims() {
+      const msg = document.getElementById("msg");
+      try {
+        const [{ data: bills, error: bErr }, { data: patients, error: pErr }] = await Promise.all([
+          window.sb
+            .from("bills")
+            .select("id, bill_number, bill_type, patient_id, billing_date, total_amount, insurance_type, insurance_provider, insurance_approval_status, insurance_approved_amount")
+            .neq("insurance_type", "Self-Pay")
+            .order("billing_date", { ascending: false }),
+          window.sb.from("patients").select("id, mrn, full_name"),
+        ]);
+        if (bErr) throw bErr;
+        if (pErr) throw pErr;
+        BILLS = bills || [];
+        PATIENT_MAP = {};
+        (patients || []).forEach((p) => { PATIENT_MAP[p.id] = p; });
+        calculateKPIs();
+        renderClaims();
+      } catch (e) {
+        showMsg(msg, "error", e.message || "Failed to load insurance claims.");
+        document.getElementById("rows").innerHTML =
+          `<tr><td colspan="8" class="empty">Could not load claims.</td></tr>`;
+      }
+    }
+
+    function calculateKPIs() {
+      let pendingCount = 0, pendingAmt = 0, approvedAmt = 0, approvedCount = 0, rejectedCount = 0;
+      BILLS.forEach((b) => {
+        if (b.insurance_approval_status === "Pending") {
+          pendingCount++;
+          pendingAmt += Number(b.total_amount || 0);
+        } else if (b.insurance_approval_status === "Approved") {
+          approvedCount++;
+          approvedAmt += Number(b.insurance_approved_amount || 0);
+        } else if (b.insurance_approval_status === "Rejected") {
+          rejectedCount++;
+        }
+      });
+      document.getElementById("kpi-pending").textContent = String(pendingCount);
+      document.getElementById("kpi-pending-desc").textContent =
+        "₹" + pendingAmt.toLocaleString("en-IN", { minimumFractionDigits: 2 }) + " billed value awaiting approval";
+      document.getElementById("kpi-approved").textContent =
+        "₹" + approvedAmt.toLocaleString("en-IN", { minimumFractionDigits: 2 });
+      document.getElementById("kpi-approved-desc").textContent =
+        approvedCount + " claim" + (approvedCount === 1 ? "" : "s") + " sanctioned";
+      document.getElementById("kpi-rejected").textContent = String(rejectedCount);
+      document.getElementById("claim-count").textContent = "(" + BILLS.length + " insurance-backed bills)";
+    }
+
+    function statusBadge(s) {
+      if (s === "Approved") return `<span class="badge discharged">Approved</span>`;
+      if (s === "Rejected") return `<span class="badge" style="background:#fee2e2;color:#991b1b">Rejected</span>`;
+      return `<span class="badge admitted">Pending</span>`;
+    }
+
+    function renderClaims() {
+      const q = document.getElementById("q").value.trim().toLowerCase();
+      const rows = document.getElementById("rows");
+      const filtered = BILLS.filter((b) => {
+        if (FILTER !== "all" && b.insurance_approval_status !== FILTER) return false;
+        if (!q) return true;
+        const pt = PATIENT_MAP[b.patient_id] || {};
+        return (
+          (b.bill_number || "").toLowerCase().includes(q) ||
+          (b.insurance_provider || "").toLowerCase().includes(q) ||
+          (pt.full_name || "").toLowerCase().includes(q) ||
+          (pt.mrn || "").toLowerCase().includes(q)
+        );
+      });
+      if (filtered.length === 0) {
+        rows.innerHTML = `<tr><td colspan="8" class="empty">No insurance claims found. Bills marked "Private Insurance" or "State Scheme" in Billing appear here.</td></tr>`;
+        return;
+      }
+      rows.innerHTML = filtered.map((b) => {
+        const pt = PATIENT_MAP[b.patient_id] || {};
+        return `
+          <tr class="clickable" data-id="${escapeHtml(b.id)}">
+            <td><strong>${escapeHtml(b.bill_number)}</strong></td>
+            <td>${escapeHtml(pt.full_name || "—")}<br/><small class="muted">${escapeHtml(pt.mrn || "")}</small></td>
+            <td>${escapeHtml(b.insurance_provider || "—")}</td>
+            <td><small class="muted">${escapeHtml(b.insurance_type)} · ${escapeHtml(b.bill_type)}</small></td>
+            <td style="text-align:right">₹${Number(b.total_amount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+            <td style="text-align:right">₹${Number(b.insurance_approved_amount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+            <td>${statusBadge(b.insurance_approval_status)}</td>
+            <td>${fmtDate(b.billing_date)}</td>
+          </tr>`;
+      }).join("");
+      rows.querySelectorAll("tr.clickable").forEach((tr) => {
+        tr.addEventListener("click", () => {
+          window.location.href = "bill-detail.html?id=" + encodeURIComponent(tr.dataset.id);
+        });
+      });
+    }
+
+    function renderEmpanelment() {
+      const el = document.getElementById("empanelment");
+      const empanelled = window.INSURANCE_DATA.stateSchemes.filter((s) => s.empanelled);
+      if (empanelled.length === 0) {
+        el.innerHTML = `<p class="muted">No scheme empanelments recorded.</p>`;
+        return;
+      }
+      el.innerHTML = empanelled.map((s) => `
+        <div style="margin-bottom:6px">
+          <strong>${escapeHtml(s.name)}</strong>
+          <span class="muted" style="font-size:13px"> — ${escapeHtml(s.note || "Empanelled")}</span><br/>
+          <span style="font-size:13px;color:var(--muted)">Covered departments:</span>
+          ${s.specialties.map((sp) => `<span class="chip">${escapeHtml(sp)}</span>`).join("")}
+        </div>
+      `).join("");
+    }
+
+    function renderDirectory(query) {
+      const q = (query || "").trim().toLowerCase();
+      const D = window.INSURANCE_DATA;
+      const schemes = D.stateSchemes.filter((s) => !q || s.name.toLowerCase().includes(q));
+      const privates = D.privateInsurers.filter((n) => !q || n.toLowerCase().includes(q));
+      const tpas = D.tpas.filter((n) => !q || n.toLowerCase().includes(q));
+
+      document.getElementById("list-schemes").innerHTML =
+        schemes.length === 0
+          ? `<li class="muted">No matches.</li>`
+          : schemes.map((s) => `
+              <li>
+                <span>${escapeHtml(s.name)}</span>
+                ${s.empanelled ? `<span class="badge discharged">Empanelled</span>` : ""}
+              </li>`).join("");
+
+      const privHtml = privates.map((n) => `<li><span>${escapeHtml(n)}</span></li>`).join("");
+      const tpaHtml = tpas.map((n) => `<li><span>${escapeHtml(n)}</span><span class="badge role">TPA</span></li>`).join("");
+      document.getElementById("list-private").innerHTML =
+        (privHtml + tpaHtml) || `<li class="muted">No matches.</li>`;
+
+      const total = D.stateSchemes.length + D.privateInsurers.length + D.tpas.length;
+      document.getElementById("dir-count").textContent =
+        "(" + total + " listed · " + (schemes.length + privates.length + tpas.length) + " shown)";
+    }
+  </script>
+</body>
+</html>
