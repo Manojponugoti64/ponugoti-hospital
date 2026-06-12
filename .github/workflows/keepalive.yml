@@ -1,0 +1,44 @@
+name: Supabase Keep-Alive
+
+# Supabase free-tier projects auto-pause after ~7 days of no activity.
+# When paused, the project's domain stops resolving (NXDOMAIN) and the whole
+# site stops working — staff cannot sign in. This workflow pings the project
+# every 3 days so the hospital backend never goes to sleep.
+#
+# It uses ONLY the public anon key (already public by design in config.js),
+# so there are no secrets to configure.
+#
+# NOTE: GitHub disables scheduled workflows after 60 days with no repo
+# activity. If the repo sits untouched for 2 months, re-enable this workflow
+# from the Actions tab (or push any commit). For a guaranteed never-pause
+# backend, upgrade the Supabase project to the Pro plan.
+
+on:
+  schedule:
+    - cron: "17 6 */3 * *" # every 3 days at 06:17 UTC
+  workflow_dispatch: {} # allow manual runs from the Actions tab
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase (Auth + REST)
+        env:
+          SUPABASE_URL: "https://guudjjhraialvabauixz.supabase.co"
+          ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd1dWRqamhyYWlhbHZhYmF1aXh6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2ODEzMDIsImV4cCI6MjA5NDI1NzMwMn0.oZOqJb1WgSxHvkLQ-2sEb4GSBopH_tzlzV30si9oBhc"
+        run: |
+          set -euo pipefail
+          echo "Pinging Auth health endpoint..."
+          curl -fsS -o /dev/null -w "auth: HTTP %{http_code}\n" \
+            "$SUPABASE_URL/auth/v1/health" -H "apikey: $ANON_KEY"
+
+          echo "Pinging REST endpoint (touches the database)..."
+          code=$(curl -sS -o /dev/null -w "%{http_code}" \
+            "$SUPABASE_URL/rest/v1/billing_services?select=count" \
+            -H "apikey: $ANON_KEY" -H "Authorization: Bearer $ANON_KEY")
+          echo "rest: HTTP $code"
+          if [ "$code" = "000" ]; then
+            echo "ERROR: project unreachable (still paused / DNS failure)." >&2
+            exit 1
+          fi
+          echo "Keep-alive ping complete - backend is awake."
