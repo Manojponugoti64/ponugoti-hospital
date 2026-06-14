@@ -8,103 +8,209 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js"></script>
   <script src="app.js"></script>
+  <style>
+    @media print { @page { size: A4; margin: 14mm; } }
+    body { background: #eef2f6; }
+    .ds-sheet {
+      background: #fff; max-width: 820px; margin: 18px auto; padding: 30px 36px;
+      border: 1px solid var(--border); box-shadow: var(--shadow); color: #1a2233;
+    }
+    @media print {
+      body { background: #fff; }
+      .ds-sheet { margin: 0; border: none; box-shadow: none; padding: 0; max-width: none; }
+      .no-print { display: none !important; }
+    }
+    .ds-head { text-align: center; border-bottom: 2px solid var(--primary-dark); padding-bottom: 10px; margin-bottom: 4px; }
+    .ds-head h1 { margin: 0; color: var(--primary-dark); font-size: 25px; letter-spacing: .3px; }
+    .ds-head .addr { font-size: 12px; color: var(--muted); margin-top: 4px; line-height: 1.5; }
+    .ds-title { text-align: center; font-size: 14px; font-weight: 700; letter-spacing: 2px; margin: 12px 0 16px; text-transform: uppercase; color: #1a2233; }
+    .ds-info { width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 13px; }
+    .ds-info td { padding: 4px 8px; vertical-align: top; border: 1px solid var(--border); }
+    .ds-info td.l { color: var(--muted); font-weight: 500; width: 120px; background: #f8fafc; white-space: nowrap; }
+    .ds-dx { border: 1px solid var(--primary); background: #f3f8fd; border-radius: 6px; padding: 10px 14px; margin-bottom: 16px; }
+    .ds-dx .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); font-weight: 600; }
+    .ds-dx .val { font-size: 15px; font-weight: 600; color: var(--primary-dark); white-space: pre-wrap; margin-top: 2px; }
+    .ds-dx .prov { font-size: 12.5px; color: var(--muted); margin-top: 6px; white-space: pre-wrap; }
+    .ds-sec { margin-bottom: 13px; }
+    .ds-sec h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: var(--primary-dark); border-bottom: 1px solid var(--border); padding-bottom: 3px; margin: 0 0 5px; }
+    .ds-sec .body { font-size: 13.5px; white-space: pre-wrap; line-height: 1.5; }
+    table.ds-data { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    table.ds-data th, table.ds-data td { border: 1px solid var(--border); padding: 5px 7px; text-align: left; vertical-align: top; }
+    table.ds-data th { background: #f1f5f9; font-size: 10.5px; text-transform: uppercase; letter-spacing: .3px; color: var(--muted); font-weight: 600; }
+    .ds-warn { border-left: 3px solid var(--danger); background: #fef2f2; padding: 8px 12px; }
+    .ds-warn h3 { color: var(--danger); border: none; margin-bottom: 3px; }
+    .ds-sign { margin-top: 44px; display: flex; justify-content: space-between; gap: 30px; font-size: 13px; }
+    .ds-sign .line { border-top: 1px solid #1a2233; padding-top: 4px; min-width: 200px; }
+    .ds-foot { margin-top: 22px; border-top: 1px dashed var(--border); padding-top: 8px; font-size: 11px; color: var(--muted); text-align: center; line-height: 1.5; }
+  </style>
 </head>
 <body>
-  <div class="no-print" style="background:#f0f4f8;padding:12px 24px;display:flex;gap:10px;align-items:center;border-bottom:1px solid var(--border)">
+  <div class="no-print" style="background:#f0f4f8;padding:12px 24px;display:flex;gap:10px;align-items:center;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:5">
     <strong style="margin-right:auto">Discharge Summary — preview</strong>
     <button class="btn" onclick="window.print()">Print / Save as PDF</button>
     <button class="btn secondary" onclick="window.close()">Close</button>
   </div>
 
-  <div id="sheet" class="print-sheet">Loading…</div>
+  <div id="sheet" class="ds-sheet">Loading…</div>
 
   <script>
     (async () => {
       const user = await requireAuth();
       if (!user) return;
       const cfg = window.PONUGOTI_CONFIG;
-      const admId = new URLSearchParams(window.location.search).get("adm");
-      if (!admId) { document.getElementById("sheet").textContent = "Missing admission id."; return; }
+      const esc = escapeHtml;
+      const sheet = document.getElementById("sheet");
 
-      const { data: adm } = await window.sb.from("admissions").select("*").eq("id", admId).maybeSingle();
-      if (!adm) { document.getElementById("sheet").textContent = "Admission not found."; return; }
+      const admId = new URLSearchParams(window.location.search).get("adm");
+      if (!admId) { sheet.textContent = "Missing admission id."; return; }
+
+      const { data: adm, error: aErr } = await window.sb.from("admissions").select("*").eq("id", admId).maybeSingle();
+      if (aErr) { sheet.textContent = "Error: " + aErr.message; return; }
+      if (!adm) { sheet.textContent = "Admission not found."; return; }
 
       const { data: pt } = await window.sb.from("patients").select("*").eq("id", adm.patient_id).maybeSingle();
-      if (!pt) { document.getElementById("sheet").textContent = "Patient record not found for this admission."; return; }
-      const { data: inv } = await window.sb
-        .from("investigations")
-        .select("*")
-        .eq("admission_id", admId)
-        .order("performed_at", { ascending: true });
+      if (!pt) { sheet.textContent = "Patient record not found for this admission."; return; }
 
-      const age = pt && pt.dob ? `${ageFromDob(pt.dob)}y` : "";
-      const days = adm.discharge_date
-        ? Math.max(1, Math.round((new Date(adm.discharge_date) - new Date(adm.admission_date)) / (1000*60*60*24)))
+      const { data: inv } = await window.sb.from("investigations").select("*")
+        .eq("admission_id", admId).order("performed_at", { ascending: true });
+
+      // ----- derived values -----
+      const age = pt.dob ? ageFromDob(pt.dob) + "y" : "";
+      const ageSex = [age, pt.sex].filter(Boolean).join(" / ");
+      const los = adm.discharge_date
+        ? Math.max(1, Math.round((new Date(adm.discharge_date) - new Date(adm.admission_date)) / 86400000))
         : null;
+      const admRef = "ADM-" + String(adm.id).slice(0, 8).toUpperCase();
 
-      const section = (title, body) => body
-        ? `<section><h3>${escapeHtml(title)}</h3><pre>${escapeHtml(body)}</pre></section>`
+      // ----- helpers -----
+      const sec = (title, body, cls) => body
+        ? `<div class="ds-sec ${cls || ""}"><h3>${esc(title)}</h3><div class="body">${esc(body)}</div></div>`
+        : "";
+      const infoRow = (l, v) => `<tr><td class="l">${esc(l)}</td><td>${esc(v || "—")}</td></tr>`;
+
+      // ----- medications -----
+      let meds = Array.isArray(adm.discharge_medications) ? adm.discharge_medications : [];
+      let medsHtml = "";
+      if (meds.length) {
+        medsHtml = `<div class="ds-sec"><h3>Medications on discharge</h3>
+          <table class="ds-data">
+            <thead><tr><th>#</th><th>Drug</th><th>Strength</th><th>Dose</th><th>Route</th><th>Frequency</th><th>Duration</th><th>Instructions</th></tr></thead>
+            <tbody>${meds.map((m, i) => `<tr>
+              <td>${i + 1}</td>
+              <td><strong>${esc(m.drug || "")}</strong></td>
+              <td>${esc(m.strength || "")}</td>
+              <td>${esc(m.dose || "")}</td>
+              <td>${esc(m.route || "")}</td>
+              <td>${esc(m.frequency || "")}</td>
+              <td>${esc(m.duration || "")}</td>
+              <td>${esc(m.instructions || "")}</td>
+            </tr>`).join("")}</tbody>
+          </table></div>`;
+      } else if (adm.medications) {
+        medsHtml = sec("Medications on discharge", adm.medications);
+      }
+
+      // ----- investigations -----
+      const invHtml = (inv && inv.length)
+        ? `<div class="ds-sec"><h3>Investigations</h3>
+            <table class="ds-data">
+              <thead><tr><th>Date</th><th>Test</th><th>Value</th><th>Units</th><th>Normal range</th><th>Comments</th></tr></thead>
+              <tbody>${inv.map(i => `<tr>
+                <td>${fmtDate(i.performed_at)}</td>
+                <td>${esc(i.test_name)}</td>
+                <td>${esc(i.test_value || "")}</td>
+                <td>${esc(i.units || "")}</td>
+                <td>${esc(i.normal_range || "")}</td>
+                <td>${esc(i.comments || "")}</td>
+              </tr>`).join("")}</tbody>
+            </table></div>`
         : "";
 
-      const invTable = (inv && inv.length)
-        ? `<section><h3>Investigations</h3>
-            <table>
-              <thead><tr><th>Date</th><th>Test</th><th>Value</th><th>Units</th><th>Normal Range</th><th>Comments</th></tr></thead>
-              <tbody>
-                ${inv.map(i => `
-                  <tr>
-                    <td>${fmtDate(i.performed_at)}</td>
-                    <td>${escapeHtml(i.test_name)}</td>
-                    <td>${escapeHtml(i.test_value || "")}</td>
-                    <td>${escapeHtml(i.units || "")}</td>
-                    <td>${escapeHtml(i.normal_range || "")}</td>
-                    <td>${escapeHtml(i.comments || "")}</td>
-                  </tr>`).join("")}
-              </tbody>
-            </table>
-           </section>`
+      // ----- hospital header lines -----
+      const headerLines = [cfg.HOSPITAL_ADDRESS, cfg.HOSPITAL_PHONE, cfg.HOSPITAL_EMAIL, cfg.HOSPITAL_REGN]
+        .filter(Boolean).map(esc).join(" &nbsp;•&nbsp; ");
+
+      // ----- diagnosis block -----
+      const dxHtml = (adm.final_diagnosis || adm.provisional_diagnosis)
+        ? `<div class="ds-dx">
+            <div class="lbl">Final diagnosis</div>
+            <div class="val">${esc(adm.final_diagnosis || "—")}</div>
+            ${adm.provisional_diagnosis ? `<div class="prov"><b>Provisional:</b> ${esc(adm.provisional_diagnosis)}</div>` : ""}
+          </div>`
         : "";
 
-      document.getElementById("sheet").innerHTML = `
-        <div class="hospital-head">
-          <h1>${escapeHtml(cfg.HOSPITAL_NAME)}</h1>
-          <p>DISCHARGE SUMMARY</p>
+      // ----- follow-up -----
+      const followBits = [];
+      if (adm.follow_up_date) followBits.push("Review on " + fmtDate(adm.follow_up_date));
+      if (adm.follow_up) followBits.push(adm.follow_up);
+      const followHtml = followBits.length ? sec("Follow-up", followBits.join(" — ")) : "";
+
+      sheet.innerHTML = `
+        <div class="ds-head">
+          <h1>${esc(cfg.HOSPITAL_NAME)}</h1>
+          ${headerLines ? `<div class="addr">${headerLines}</div>` : ""}
         </div>
+        <div class="ds-title">Discharge Summary</div>
 
-        <section>
-          <div class="pt-grid">
-            <div><b>Name:</b> ${escapeHtml(pt.full_name)}</div>
-            <div><b>MRN:</b> ${escapeHtml(pt.mrn)}</div>
-            <div><b>Age / Sex:</b> ${age}${age && pt.sex ? " / " : ""}${escapeHtml(pt.sex || "")}</div>
-            <div><b>Phone:</b> ${escapeHtml(pt.phone || "—")}</div>
-            <div><b>Ward / Bed:</b> ${escapeHtml(adm.ward || "—")}${adm.bed ? " / " + escapeHtml(adm.bed) : ""}</div>
-            <div><b>Doctor:</b> ${escapeHtml(adm.admitting_doctor || "—")}</div>
-            <div><b>Admitted:</b> ${fmtDate(adm.admission_date)}</div>
-            <div><b>Discharged:</b> ${adm.discharge_date ? fmtDate(adm.discharge_date) : "—"}</div>
-            <div><b>LOS:</b> ${days ? days + " day(s)" : "—"}</div>
-          </div>
-          ${pt.address ? `<p style="font-size:13px;margin-top:8px"><b style="color:var(--muted);font-weight:500">Address:</b> ${escapeHtml(pt.address)}</p>` : ""}
-        </section>
+        <table class="ds-info">
+          <tr>
+            <td class="l">Patient name</td><td><strong>${esc(pt.full_name)}</strong></td>
+            <td class="l">MRN / UHID</td><td>${esc(pt.mrn)}</td>
+          </tr>
+          <tr>
+            <td class="l">Age / Sex</td><td>${esc(ageSex || "—")}</td>
+            <td class="l">Admission ID</td><td>${esc(admRef)}</td>
+          </tr>
+          <tr>
+            <td class="l">Phone</td><td>${esc(pt.phone || "—")}</td>
+            <td class="l">Blood group</td><td>${esc(pt.blood_group || "—")}</td>
+          </tr>
+          <tr>
+            <td class="l">Ward / Bed</td><td>${esc([adm.ward, adm.bed].filter(Boolean).join(" / ") || "—")}</td>
+            <td class="l">Treating doctor</td><td>${esc(adm.admitting_doctor || "—")}</td>
+          </tr>
+          <tr>
+            <td class="l">Admitted</td><td>${adm.admission_date ? fmtDateTime(adm.admission_date) : "—"}</td>
+            <td class="l">Discharged</td><td>${adm.discharge_date ? fmtDateTime(adm.discharge_date) : "—"}</td>
+          </tr>
+          <tr>
+            <td class="l">Length of stay</td><td>${los ? los + " day(s)" : "—"}</td>
+            <td class="l">Address</td><td>${esc(pt.address || "—")}</td>
+          </tr>
+        </table>
 
-        ${section("Chief Complaints", adm.chief_complaints)}
-        ${section("Provisional Diagnosis", adm.provisional_diagnosis)}
-        ${section("Final Diagnosis", adm.final_diagnosis)}
-        ${section("Treatment Given", adm.treatment_given)}
-        ${invTable}
-        ${section("Medications on Discharge", adm.medications)}
-        ${section("Condition at Discharge", adm.condition_at_discharge)}
-        ${section("Follow-up Instructions", adm.follow_up)}
-        ${section("Clinical Summary", adm.discharge_summary)}
+        ${dxHtml}
 
-        <div class="signature">
+        ${sec("Chief complaints", adm.chief_complaints)}
+        ${sec("History of present illness", adm.history_present_illness)}
+        ${sec("Past history / comorbidities", adm.past_history)}
+        ${sec("Known allergies", adm.allergies)}
+        ${sec("Examination & vitals on admission", adm.examination_findings)}
+        ${invHtml}
+        ${sec("Course in hospital", adm.course_in_hospital)}
+        ${sec("Procedures / surgery performed", adm.procedures)}
+        ${sec("Treatment given", adm.treatment_given)}
+        ${sec("Condition at discharge", adm.condition_at_discharge)}
+        ${medsHtml}
+        ${sec("Diet & activity advice", adm.diet_activity_advice)}
+        ${followHtml}
+        ${adm.warning_signs ? sec("Report immediately if", adm.warning_signs, "ds-warn") : ""}
+        ${sec("Additional clinical remarks", adm.discharge_summary)}
+
+        <div class="ds-sign">
           <div>
-            <div style="height:40px"></div>
-            Patient / Attendant signature
+            <div style="height:42px"></div>
+            <div class="line">Patient / attendant signature</div>
           </div>
           <div style="text-align:right">
-            <div style="height:40px"></div>
-            ${escapeHtml(adm.admitting_doctor || "Attending Physician")}
+            <div style="height:42px"></div>
+            <div class="line">${esc(adm.admitting_doctor || "Treating Physician")}<br/><span style="color:var(--muted);font-size:12px">Signature &amp; seal</span></div>
           </div>
+        </div>
+
+        <div class="ds-foot">
+          This is a computer-generated discharge summary from ${esc(cfg.HOSPITAL_NAME)}.
+          Generated on ${fmtDateTime(new Date().toISOString())} by ${esc((user && user.email) || "")}.
         </div>
       `;
     })();

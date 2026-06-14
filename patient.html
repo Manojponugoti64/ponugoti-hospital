@@ -8,6 +8,23 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js"></script>
   <script src="app.js"></script>
+  <style>
+    .med-tbl td { padding: 4px 6px; }
+    .med-tbl input {
+      width: 100%;
+      font: inherit;
+      font-size: 13px;
+      padding: 6px 8px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: #fff;
+    }
+    .med-tbl input:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px rgba(26, 108, 196, .15);
+    }
+  </style>
 </head>
 <body>
   <div class="container" id="page" style="display:none">
@@ -132,42 +149,123 @@
               <input id="adm-bed" />
             </label>
             <label class="field full">
-              <span>Admitting doctor</span>
-              <input id="adm-admitting_doctor" />
+              <span>Treating / admitting doctor</span>
+              <input id="adm-admitting_doctor" placeholder="e.g. Dr. Manoj Kumar, MBBS, MD — Reg. No. 12345" />
             </label>
+
             <label class="field full">
               <span>Chief complaints</span>
-              <textarea id="adm-chief_complaints"></textarea>
+              <textarea id="adm-chief_complaints" placeholder="Presenting complaints with duration"></textarea>
+            </label>
+            <label class="field full">
+              <span>History of present illness</span>
+              <textarea id="adm-history_present_illness"></textarea>
+            </label>
+            <label class="field full">
+              <span>Past history / comorbidities</span>
+              <textarea id="adm-past_history" placeholder="Diabetes, hypertension, prior surgeries, etc."></textarea>
+            </label>
+            <label class="field full">
+              <span>Known allergies</span>
+              <input id="adm-allergies" placeholder="Drug / food allergies — write 'Nil known' if none" />
+            </label>
+            <label class="field full">
+              <span>Examination &amp; vitals on admission</span>
+              <textarea id="adm-examination_findings" placeholder="General condition, vitals (BP, PR, RR, Temp, SpO2), systemic exam"></textarea>
             </label>
             <label class="field full">
               <span>Provisional diagnosis</span>
               <textarea id="adm-provisional_diagnosis"></textarea>
             </label>
             <label class="field full">
-              <span>Final diagnosis</span>
-              <textarea id="adm-final_diagnosis"></textarea>
+              <span>Course in hospital</span>
+              <textarea id="adm-course_in_hospital" placeholder="How the patient progressed during the stay"></textarea>
+            </label>
+            <label class="field full">
+              <span>Procedures / surgery performed</span>
+              <textarea id="adm-procedures" placeholder="Procedures or surgeries done, with dates — write 'Nil' if none"></textarea>
             </label>
             <label class="field full">
               <span>Treatment given</span>
               <textarea id="adm-treatment_given"></textarea>
             </label>
             <label class="field full">
-              <span>Medications</span>
-              <textarea id="adm-medications" placeholder="One per line: Drug — dose, frequency, duration"></textarea>
+              <span>Final diagnosis</span>
+              <textarea id="adm-final_diagnosis"></textarea>
             </label>
             <label class="field full">
               <span>Condition at discharge</span>
-              <textarea id="adm-condition_at_discharge"></textarea>
-            </label>
-            <label class="field full">
-              <span>Follow-up instructions</span>
-              <textarea id="adm-follow_up"></textarea>
-            </label>
-            <label class="field full">
-              <span>Discharge summary (free text)</span>
-              <textarea id="adm-discharge_summary" rows="6"></textarea>
+              <textarea id="adm-condition_at_discharge" placeholder="e.g. Stable, afebrile, tolerating orally"></textarea>
             </label>
           </div>
+
+          <!-- Structured discharge medications -->
+          <div style="margin-top:16px">
+            <span style="font-size:13px;color:var(--muted);font-weight:500">Discharge medications</span>
+            <div style="overflow-x:auto;margin-top:6px">
+              <table class="data med-tbl" id="med-tbl">
+                <thead>
+                  <tr>
+                    <th style="min-width:150px">Drug</th>
+                    <th style="min-width:80px">Strength</th>
+                    <th style="min-width:80px">Dose</th>
+                    <th style="min-width:80px">Route</th>
+                    <th style="min-width:100px">Frequency</th>
+                    <th style="min-width:90px">Duration</th>
+                    <th style="min-width:130px">Instructions</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="med-rows"></tbody>
+              </table>
+            </div>
+            <button type="button" class="btn small secondary" id="med-add" style="margin-top:8px">+ Add medication</button>
+          </div>
+
+          <div class="form-grid" style="margin-top:16px">
+            <label class="field full">
+              <span>Diet &amp; activity advice</span>
+              <textarea id="adm-diet_activity_advice" placeholder="Diet, rest, wound care, activity restrictions"></textarea>
+            </label>
+            <label class="field">
+              <span>Follow-up date</span>
+              <input id="adm-follow_up_date" type="date" />
+            </label>
+            <label class="field">
+              <span>Follow-up with</span>
+              <input id="adm-follow_up" placeholder="Dept / doctor / OPD instructions" />
+            </label>
+            <label class="field full">
+              <span>Report immediately if (warning signs)</span>
+              <textarea id="adm-warning_signs" placeholder="e.g. High fever, bleeding, breathlessness, severe pain"></textarea>
+            </label>
+            <label class="field full">
+              <span>Additional clinical remarks (optional)</span>
+              <textarea id="adm-discharge_summary" rows="4"></textarea>
+            </label>
+          </div>
+
+          <datalist id="freq-list">
+            <option value="OD (once daily)"></option>
+            <option value="BD (twice daily)"></option>
+            <option value="TDS (thrice daily)"></option>
+            <option value="QID (four times daily)"></option>
+            <option value="HS (at bedtime)"></option>
+            <option value="SOS (when required)"></option>
+            <option value="STAT (immediately)"></option>
+            <option value="Q8H"></option>
+            <option value="Weekly"></option>
+          </datalist>
+          <datalist id="route-list">
+            <option value="Oral"></option>
+            <option value="IV"></option>
+            <option value="IM"></option>
+            <option value="S/C"></option>
+            <option value="Topical"></option>
+            <option value="Inhaled"></option>
+            <option value="Sublingual"></option>
+            <option value="PR"></option>
+          </datalist>
           <div class="actions">
             <button type="submit" class="btn" id="adm-save">Save admission</button>
             <button type="button" class="btn secondary" id="adm-close">Close</button>
@@ -423,6 +521,42 @@
       }).join("");
     }
 
+    // ---------- Structured discharge medications ----------
+    const MED_FIELDS = ["drug", "strength", "dose", "route", "frequency", "duration", "instructions"];
+    const MED_PLACEHOLDER = {
+      drug: "Tab Pantoprazole", strength: "40 mg", dose: "1 tab",
+      route: "Oral", frequency: "BD", duration: "5 days", instructions: "Before food",
+    };
+
+    function medRowHtml(m) {
+      m = m || {};
+      const cell = (k) => {
+        const list = k === "frequency" ? ' list="freq-list"' : k === "route" ? ' list="route-list"' : "";
+        return `<td><input class="med-f" data-k="${k}"${list} value="${escapeHtml(m[k] || "")}" placeholder="${escapeHtml(MED_PLACEHOLDER[k])}" /></td>`;
+      };
+      return `<tr>${MED_FIELDS.map(cell).join("")}<td><button type="button" class="btn small danger med-del" title="Remove">✕</button></td></tr>`;
+    }
+
+    // Render structured meds; fall back to legacy free-text medications (one per line).
+    function renderMeds(meds, legacyText) {
+      let list = Array.isArray(meds) ? meds.slice() : [];
+      if (list.length === 0 && legacyText) {
+        list = String(legacyText).split("\n").map((line) => line.trim()).filter(Boolean).map((line) => ({ drug: line }));
+      }
+      const tbody = document.getElementById("med-rows");
+      tbody.innerHTML = list.length ? list.map(medRowHtml).join("") : medRowHtml({});
+    }
+
+    function collectMeds() {
+      const meds = [];
+      document.querySelectorAll("#med-rows tr").forEach((tr) => {
+        const m = {};
+        tr.querySelectorAll(".med-f").forEach((inp) => { m[inp.dataset.k] = inp.value.trim(); });
+        if (MED_FIELDS.some((k) => m[k])) meds.push(m);
+      });
+      return meds;
+    }
+
     async function openAdmission(id) {
       const a = ADMISSIONS.find((x) => x.id === id);
       if (!a) return;
@@ -440,13 +574,22 @@
       f("adm-bed").value                 = a.bed || "";
       f("adm-admitting_doctor").value    = a.admitting_doctor || "";
       f("adm-chief_complaints").value    = a.chief_complaints || "";
+      f("adm-history_present_illness").value = a.history_present_illness || "";
+      f("adm-past_history").value        = a.past_history || "";
+      f("adm-allergies").value           = a.allergies || "";
+      f("adm-examination_findings").value = a.examination_findings || "";
       f("adm-provisional_diagnosis").value = a.provisional_diagnosis || "";
-      f("adm-final_diagnosis").value     = a.final_diagnosis || "";
+      f("adm-course_in_hospital").value  = a.course_in_hospital || "";
+      f("adm-procedures").value          = a.procedures || "";
       f("adm-treatment_given").value     = a.treatment_given || "";
-      f("adm-medications").value         = a.medications || "";
+      f("adm-final_diagnosis").value     = a.final_diagnosis || "";
       f("adm-condition_at_discharge").value = a.condition_at_discharge || "";
+      f("adm-diet_activity_advice").value = a.diet_activity_advice || "";
+      f("adm-follow_up_date").value      = a.follow_up_date || "";
       f("adm-follow_up").value           = a.follow_up || "";
+      f("adm-warning_signs").value       = a.warning_signs || "";
       f("adm-discharge_summary").value   = a.discharge_summary || "";
+      renderMeds(a.discharge_medications, a.medications);
       document.getElementById("adm-title").firstChild.textContent =
         `Admission — ${fmtDate(a.admission_date)} `;
       document.getElementById("print-btn").href = `print-discharge.html?adm=${encodeURIComponent(a.id)}`;
@@ -658,26 +801,47 @@
         const msg = document.getElementById("msg");
         clearMsg(msg);
         const fromLocal = (v) => v ? new Date(v).toISOString() : null;
+        const val = (id) => document.getElementById(id).value.trim() || null;
         const payload = {
           admission_date: fromLocal(document.getElementById("adm-admission_date").value),
           discharge_date: fromLocal(document.getElementById("adm-discharge_date").value),
-          ward: document.getElementById("adm-ward").value.trim() || null,
-          bed: document.getElementById("adm-bed").value.trim() || null,
-          admitting_doctor: document.getElementById("adm-admitting_doctor").value.trim() || null,
-          chief_complaints: document.getElementById("adm-chief_complaints").value.trim() || null,
-          provisional_diagnosis: document.getElementById("adm-provisional_diagnosis").value.trim() || null,
-          final_diagnosis: document.getElementById("adm-final_diagnosis").value.trim() || null,
-          treatment_given: document.getElementById("adm-treatment_given").value.trim() || null,
-          medications: document.getElementById("adm-medications").value.trim() || null,
-          condition_at_discharge: document.getElementById("adm-condition_at_discharge").value.trim() || null,
-          follow_up: document.getElementById("adm-follow_up").value.trim() || null,
-          discharge_summary: document.getElementById("adm-discharge_summary").value.trim() || null,
+          ward: val("adm-ward"),
+          bed: val("adm-bed"),
+          admitting_doctor: val("adm-admitting_doctor"),
+          chief_complaints: val("adm-chief_complaints"),
+          history_present_illness: val("adm-history_present_illness"),
+          past_history: val("adm-past_history"),
+          allergies: val("adm-allergies"),
+          examination_findings: val("adm-examination_findings"),
+          provisional_diagnosis: val("adm-provisional_diagnosis"),
+          course_in_hospital: val("adm-course_in_hospital"),
+          procedures: val("adm-procedures"),
+          treatment_given: val("adm-treatment_given"),
+          final_diagnosis: val("adm-final_diagnosis"),
+          condition_at_discharge: val("adm-condition_at_discharge"),
+          discharge_medications: collectMeds(),
+          diet_activity_advice: val("adm-diet_activity_advice"),
+          follow_up_date: document.getElementById("adm-follow_up_date").value || null,
+          follow_up: val("adm-follow_up"),
+          warning_signs: val("adm-warning_signs"),
+          discharge_summary: val("adm-discharge_summary"),
         };
         const { error } = await window.sb.from("admissions").update(payload).eq("id", CURRENT_ADM.id);
         if (error) { showMsg(msg, "error", error.message); return; }
         showMsg(msg, "success", "Admission saved.");
         await loadAdmissions(PATIENT.id);
         openAdmission(CURRENT_ADM.id);
+      });
+
+      // Discharge medications: add row
+      document.getElementById("med-add").addEventListener("click", () => {
+        document.getElementById("med-rows").insertAdjacentHTML("beforeend", medRowHtml({}));
+      });
+      // Discharge medications: remove row (delegated)
+      document.getElementById("med-rows").addEventListener("click", (e) => {
+        if (!e.target.classList.contains("med-del")) return;
+        e.target.closest("tr").remove();
+        if (!document.querySelector("#med-rows tr")) renderMeds([]);
       });
 
       // Admission close
