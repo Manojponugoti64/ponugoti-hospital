@@ -137,6 +137,22 @@ function canEditBilling(role)       { return ['admin','doctor','nurse','receptio
 function canEditInsurance(role)     { return ['admin','doctor','nurse','reception'].includes(role); }
 function canDeleteAdmin(role)       { return role === 'admin'; }
 
+// ---------- Billing helpers ----------
+// Generates the next sequential bill number, e.g. OPB-2026-0001 / IPB-2026-0007.
+// Used by billing.html, patient.html (and OP visit billing). Shared here so every
+// page has it (previously called but undefined -> bill creation threw).
+async function generateBillNumber(type) {
+  const year = new Date().getFullYear();
+  const prefix = (type === 'IP' ? 'IPB' : 'OPB') + '-' + year + '-';
+  const { count, error } = await window.sb
+    .from('bills')
+    .select('*', { count: 'exact', head: true })
+    .ilike('bill_number', prefix + '%');
+  if (error) console.error('generateBillNumber:', error.message);
+  const nextSeq = String((count || 0) + 1).padStart(4, '0');
+  return prefix + nextSeq;
+}
+
 // ---------- Sidebar render ----------
 async function renderTopbar(activePage) {
   const profile = await getCurrentProfile();

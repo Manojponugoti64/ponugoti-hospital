@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>OP Visit Summary - Ponugoti Hospital</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+  <style>
+    @media print { @page { size: A4; margin: 14mm; } }
+    body { background: #eef2f6; }
+    .ds-sheet { background:#fff; max-width:820px; margin:18px auto; padding:30px 36px; border:1px solid var(--border); box-shadow:var(--shadow); color:#1a2233; }
+    @media print { body { background:#fff; } .ds-sheet { margin:0; border:none; box-shadow:none; padding:0; max-width:none; } .no-print { display:none !important; } }
+    .ds-head { text-align:center; border-bottom:2px solid var(--primary-dark); padding-bottom:10px; margin-bottom:4px; }
+    .ds-head h1 { margin:0; color:var(--primary-dark); font-size:25px; letter-spacing:.3px; }
+    .ds-head .addr { font-size:12px; color:var(--muted); margin-top:4px; line-height:1.5; }
+    .ds-title { text-align:center; font-size:14px; font-weight:700; letter-spacing:2px; margin:12px 0 16px; text-transform:uppercase; }
+    .ds-info { width:100%; border-collapse:collapse; margin-bottom:16px; font-size:13px; }
+    .ds-info td { padding:4px 8px; vertical-align:top; border:1px solid var(--border); }
+    .ds-info td.l { color:var(--muted); font-weight:500; width:120px; background:#f8fafc; white-space:nowrap; }
+    .ds-dx { border:1px solid var(--primary); background:#f3f8fd; border-radius:6px; padding:10px 14px; margin-bottom:16px; }
+    .ds-dx .lbl { font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); font-weight:600; }
+    .ds-dx .val { font-size:15px; font-weight:600; color:var(--primary-dark); white-space:pre-wrap; margin-top:2px; }
+    .ds-sec { margin-bottom:13px; }
+    .ds-sec h3 { font-size:12px; text-transform:uppercase; letter-spacing:.5px; color:var(--primary-dark); border-bottom:1px solid var(--border); padding-bottom:3px; margin:0 0 5px; }
+    .ds-sec .body { font-size:13.5px; white-space:pre-wrap; line-height:1.5; }
+    .rx-head { font-size:30px; color:var(--primary-dark); font-weight:700; line-height:1; margin-bottom:6px; }
+    table.ds-data { width:100%; border-collapse:collapse; font-size:12.5px; }
+    table.ds-data th, table.ds-data td { border:1px solid var(--border); padding:5px 7px; text-align:left; vertical-align:top; }
+    table.ds-data th { background:#f1f5f9; font-size:10.5px; text-transform:uppercase; letter-spacing:.3px; color:var(--muted); font-weight:600; }
+    .ds-sign { margin-top:44px; display:flex; justify-content:flex-end; font-size:13px; }
+    .ds-sign .line { border-top:1px solid #1a2233; padding-top:4px; min-width:220px; text-align:center; }
+    .ds-foot { margin-top:22px; border-top:1px dashed var(--border); padding-top:8px; font-size:11px; color:var(--muted); text-align:center; line-height:1.5; }
+  </style>
+</head>
+<body>
+  <div class="no-print" style="background:#f0f4f8;padding:12px 24px;display:flex;gap:10px;align-items:center;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:5">
+    <strong style="margin-right:auto">OP Visit Summary — preview</strong>
+    <button class="btn" onclick="window.print()">Print / Save as PDF</button>
+    <button class="btn secondary" onclick="window.close()">Close</button>
+  </div>
+
+  <div id="sheet" class="ds-sheet">Loading…</div>
+
+  <script>
+    (async () => {
+      const user = await requireAuth();
+      if (!user) return;
+      const cfg = window.PONUGOTI_CONFIG;
+      const esc = escapeHtml;
+      const sheet = document.getElementById("sheet");
+
+      const visitId = new URLSearchParams(window.location.search).get("visit");
+      if (!visitId) { sheet.textContent = "Missing visit id."; return; }
+
+      const { data: v, error: vErr } = await window.sb.from("op_visits").select("*").eq("id", visitId).maybeSingle();
+      if (vErr) { sheet.textContent = "Error: " + vErr.message; return; }
+      if (!v) { sheet.textContent = "OP visit not found."; return; }
+
+      const { data: pt } = await window.sb.from("patients").select("*").eq("id", v.patient_id).maybeSingle();
+      if (!pt) { sheet.textContent = "Patient record not found for this visit."; return; }
+
+      const age = pt.dob ? ageFromDob(pt.dob) + "y" : "";
+      const ageSex = [age, pt.sex].filter(Boolean).join(" / ");
+      const visitRef = "OPV-" + String(v.id).slice(0, 8).toUpperCase();
+
+      const sec = (title, body) => body
+        ? `<div class="ds-sec"><h3>${esc(title)}</h3><div class="body">${esc(body)}</div></div>` : "";
+
+      const rx = Array.isArray(v.prescription_meds) ? v.prescription_meds : [];
+      let rxHtml = "";
+      if (rx.length) {
+        rxHtml = `<div class="ds-sec"><h3><span class="rx-head">℞</span> Prescription</h3>
+          <table class="ds-data"><thead><tr><th>#</th><th>Drug</th><th>Strength</th><th>Dose</th><th>Route</th><th>Frequency</th><th>Duration</th><th>Instructions</th></tr></thead>
+          <tbody>${rx.map((m, i) => `<tr>
+            <td>${i + 1}</td><td><strong>${esc(m.drug || "")}</strong></td><td>${esc(m.strength || "")}</td>
+            <td>${esc(m.dose || "")}</td><td>${esc(m.route || "")}</td><td>${esc(m.frequency || "")}</td>
+            <td>${esc(m.duration || "")}</td><td>${esc(m.instructions || "")}</td></tr>`).join("")}</tbody></table></div>`;
+      } else if (v.prescription) { rxHtml = sec("Prescription", v.prescription); }
+
+      const headerLines = [cfg.HOSPITAL_ADDRESS, cfg.HOSPITAL_PHONE, cfg.HOSPITAL_EMAIL, cfg.HOSPITAL_REGN]
+        .filter(Boolean).map(esc).join(" &nbsp;•&nbsp; ");
+
+      sheet.innerHTML = `
+        <div class="ds-head">
+          <h1>${esc(cfg.HOSPITAL_NAME)}</h1>
+          ${headerLines ? `<div class="addr">${headerLines}</div>` : ""}
+        </div>
+        <div class="ds-title">Outpatient Visit Summary</div>
+
+        <table class="ds-info">
+          <tr><td class="l">Patient name</td><td><strong>${esc(pt.full_name)}</strong></td><td class="l">MRN / UHID</td><td>${esc(pt.mrn)}</td></tr>
+          <tr><td class="l">Age / Sex</td><td>${esc(ageSex || "—")}</td><td class="l">Visit ID</td><td>${esc(visitRef)}</td></tr>
+          <tr><td class="l">Phone</td><td>${esc(pt.phone || "—")}</td><td class="l">Visit date</td><td>${v.visit_date ? fmtDateTime(v.visit_date) : "—"}</td></tr>
+          <tr><td class="l">Department</td><td>${esc(v.department || "—")}</td><td class="l">Doctor</td><td>${esc(v.doctor || "—")}</td></tr>
+          <tr><td class="l">Visit type</td><td>${esc(v.visit_type || "OP")}</td><td class="l">Next review</td><td>${v.follow_up_date ? fmtDate(v.follow_up_date) : "—"}</td></tr>
+        </table>
+
+        ${v.diagnosis ? `<div class="ds-dx"><div class="lbl">Diagnosis</div><div class="val">${esc(v.diagnosis)}</div></div>` : ""}
+
+        ${sec("Symptoms / complaints", v.symptoms)}
+        ${sec("Examination & vitals", v.examination_findings)}
+        ${rxHtml}
+        ${sec("Advice", v.advice)}
+        ${v.follow_up_date ? sec("Follow-up", "Please come for review on " + fmtDate(v.follow_up_date)) : ""}
+
+        <div class="ds-sign">
+          <div>
+            <div style="height:42px"></div>
+            <div class="line">${esc(v.doctor || "Consulting Physician")}<br/><span style="color:var(--muted);font-size:12px">Signature &amp; seal</span></div>
+          </div>
+        </div>
+
+        <div class="ds-foot">
+          Computer-generated OP visit summary from ${esc(cfg.HOSPITAL_NAME)}.
+          Generated on ${fmtDateTime(new Date().toISOString())} by ${esc((user && user.email) || "")}.
+        </div>
+      `;
+    })();
+  </script>
+</body>
+</html>

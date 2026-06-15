@@ -296,6 +296,127 @@
         </table>
       </div>
     </div>
+
+    <!-- ===== OP Visits list ===== -->
+    <div class="card">
+      <h2>OP Visits
+        <button class="btn small" id="new-op-visit-btn" style="float:right">+ New OP visit</button>
+      </h2>
+      <table class="data" id="opv-tbl">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Doctor</th>
+            <th>Department</th>
+            <th>Diagnosis</th>
+            <th>Follow-up</th>
+            <th>Bill</th>
+          </tr>
+        </thead>
+        <tbody id="opv-rows"><tr><td colspan="6" class="empty">No OP visits yet.</td></tr></tbody>
+      </table>
+    </div>
+
+    <!-- ===== Selected OP visit detail ===== -->
+    <div id="opv-detail" style="display:none">
+      <div class="card">
+        <h2 id="opv-title">OP visit
+          <a class="btn small secondary" id="opv-print-btn" target="_blank" style="float:right;margin-left:8px">Print visit summary</a>
+        </h2>
+        <form id="opv-form">
+          <div class="form-grid">
+            <label class="field">
+              <span>Visit date *</span>
+              <input id="opv-visit_date" type="datetime-local" required />
+            </label>
+            <label class="field">
+              <span>Visit type</span>
+              <select id="opv-visit_type">
+                <option value="OP">OP (consultation)</option>
+                <option value="Review">Review</option>
+                <option value="Emergency">Emergency</option>
+                <option value="Procedure">Procedure</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Doctor</span>
+              <input id="opv-doctor" placeholder="e.g. Dr. Manoj Kumar" />
+            </label>
+            <label class="field">
+              <span>Department</span>
+              <input id="opv-department" list="dept-list" placeholder="e.g. General Medicine" />
+            </label>
+            <label class="field full">
+              <span>Symptoms / complaints</span>
+              <textarea id="opv-symptoms"></textarea>
+            </label>
+            <label class="field full">
+              <span>Examination &amp; vitals</span>
+              <textarea id="opv-examination_findings" placeholder="BP, PR, Temp, SpO2, relevant exam"></textarea>
+            </label>
+            <label class="field full">
+              <span>Diagnosis</span>
+              <textarea id="opv-diagnosis"></textarea>
+            </label>
+            <label class="field full">
+              <span>Advice</span>
+              <textarea id="opv-advice" placeholder="Investigations advised, lifestyle, referrals"></textarea>
+            </label>
+          </div>
+
+          <!-- Structured prescription -->
+          <div style="margin-top:16px">
+            <span style="font-size:13px;color:var(--muted);font-weight:500">Prescription (Rx)</span>
+            <div style="overflow-x:auto;margin-top:6px">
+              <table class="data med-tbl" id="rx-tbl">
+                <thead>
+                  <tr>
+                    <th style="min-width:150px">Drug</th>
+                    <th style="min-width:80px">Strength</th>
+                    <th style="min-width:80px">Dose</th>
+                    <th style="min-width:80px">Route</th>
+                    <th style="min-width:100px">Frequency</th>
+                    <th style="min-width:90px">Duration</th>
+                    <th style="min-width:130px">Instructions</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="rx-rows"></tbody>
+              </table>
+            </div>
+            <button type="button" class="btn small secondary" id="rx-add" style="margin-top:8px">+ Add medicine</button>
+          </div>
+
+          <div class="form-grid" style="margin-top:16px">
+            <label class="field">
+              <span>Follow-up date</span>
+              <input id="opv-follow_up_date" type="date" />
+            </label>
+          </div>
+
+          <div class="actions">
+            <button type="submit" class="btn" id="opv-save">Save OP visit</button>
+            <button type="button" class="btn secondary" id="opv-close">Close</button>
+            <button type="button" class="btn" id="opv-bill-btn" style="background:#0f8a6c;border-color:#0f8a6c">Create / open OP bill</button>
+            <button type="button" class="btn danger" id="opv-delete" style="margin-left:auto">Delete visit</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <datalist id="dept-list">
+      <option value="General Medicine"></option>
+      <option value="Urology"></option>
+      <option value="Nephrology"></option>
+      <option value="General Surgery"></option>
+      <option value="Orthopedics"></option>
+      <option value="Pediatrics"></option>
+      <option value="Obstetrics &amp; Gynaecology"></option>
+      <option value="ENT"></option>
+      <option value="Dermatology"></option>
+      <option value="Cardiology"></option>
+    </datalist>
+
   </div>
 
   <!-- Modal for adding investigation -->
@@ -388,15 +509,20 @@
       await loadPatient(id);
       await loadAdmissions(id);
       await loadBills(id);
+      await loadOpVisits(id);
       if (isNewParam()) {
         showMsg(document.getElementById("msg"), "success", "Patient registered. You can now add an admission below.");
       }
       bindHandlers();
       applyRoleGating();
 
-      // Deep link from the Discharge hub: ?adm=<id> auto-opens that admission.
-      const admParam = new URLSearchParams(window.location.search).get("adm");
+      // Deep links from the Episodes hub: ?adm=<id> opens an admission,
+      // ?opv=<id> opens an OP visit.
+      const qp = new URLSearchParams(window.location.search);
+      const admParam = qp.get("adm");
       if (admParam) await openAdmission(admParam);
+      const opvParam = qp.get("opv");
+      if (opvParam) openOpVisit(opvParam);
     })();
 
     function applyRoleGating() {
@@ -408,9 +534,13 @@
         document.getElementById("pt-delete").style.display = "none";
         const ad = document.getElementById("adm-delete");
         if (ad) ad.style.display = "none";
+        const ov = document.getElementById("opv-delete");
+        if (ov) ov.style.display = "none";
       }
       if (!canEditAdmission(PROFILE.role)) {
         document.getElementById("new-adm-btn").style.display = "none";
+        const nv = document.getElementById("new-op-visit-btn");
+        if (nv) nv.style.display = "none";
       }
       if (!canEditInvestigation(PROFILE.role)) {
         document.getElementById("inv-add").style.display = "none";
@@ -542,23 +672,140 @@
     }
 
     // Render structured meds; fall back to legacy free-text medications (one per line).
-    function renderMeds(meds, legacyText) {
+    function renderMeds(meds, legacyText, tbodyId) {
+      tbodyId = tbodyId || "med-rows";
       let list = Array.isArray(meds) ? meds.slice() : [];
       if (list.length === 0 && legacyText) {
         list = String(legacyText).split("\n").map((line) => line.trim()).filter(Boolean).map((line) => ({ drug: line }));
       }
-      const tbody = document.getElementById("med-rows");
+      const tbody = document.getElementById(tbodyId);
       tbody.innerHTML = list.length ? list.map(medRowHtml).join("") : medRowHtml({});
     }
 
-    function collectMeds() {
+    function collectMeds(tbodyId) {
+      tbodyId = tbodyId || "med-rows";
       const meds = [];
-      document.querySelectorAll("#med-rows tr").forEach((tr) => {
+      document.querySelectorAll("#" + tbodyId + " tr").forEach((tr) => {
         const m = {};
         tr.querySelectorAll(".med-f").forEach((inp) => { m[inp.dataset.k] = inp.value.trim(); });
         if (MED_FIELDS.some((k) => m[k])) meds.push(m);
       });
       return meds;
+    }
+
+    // ---------- OP Visits ----------
+    let OP_VISITS = [];
+    let OPV_BILLS = {};   // op_visit_id -> bill row
+    let CURRENT_OPV = null;
+
+    async function loadOpVisits(patientId) {
+      const { data, error } = await window.sb
+        .from("op_visits").select("*").eq("patient_id", patientId)
+        .order("visit_date", { ascending: false });
+      if (error) { showMsg(document.getElementById("msg"), "error", error.message); return; }
+      OP_VISITS = data || [];
+      const { data: bills } = await window.sb
+        .from("bills").select("id, op_visit_id, bill_number, total_amount, amount_paid, payment_status")
+        .eq("patient_id", patientId).not("op_visit_id", "is", null);
+      OPV_BILLS = {};
+      (bills || []).forEach((b) => { OPV_BILLS[b.op_visit_id] = b; });
+      renderOpVisits();
+    }
+
+    function renderOpVisits() {
+      const tbody = document.getElementById("opv-rows");
+      if (OP_VISITS.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="empty">No OP visits yet.</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = OP_VISITS.map((v) => {
+        const bill = OPV_BILLS[v.id];
+        const billCell = bill
+          ? `<span class="badge ${bill.payment_status === "Paid" ? "discharged" : "admitted"}">${escapeHtml(bill.payment_status)}</span>`
+          : `<span class="muted">No bill</span>`;
+        return `<tr class="clickable" data-id="${escapeHtml(v.id)}">
+          <td>${v.visit_date ? fmtDate(v.visit_date) : "—"}</td>
+          <td>${escapeHtml(v.doctor || "—")}</td>
+          <td>${escapeHtml(v.department || "—")}</td>
+          <td>${escapeHtml(v.diagnosis || "—")}</td>
+          <td>${v.follow_up_date ? fmtDate(v.follow_up_date) : "—"}</td>
+          <td>${billCell}</td>
+        </tr>`;
+      }).join("");
+      tbody.querySelectorAll("tr.clickable").forEach((tr) => {
+        tr.addEventListener("click", () => openOpVisit(tr.dataset.id));
+      });
+    }
+
+    function openOpVisit(id) {
+      const v = OP_VISITS.find((x) => x.id === id);
+      if (!v) return;
+      CURRENT_OPV = v;
+      const f = (k) => document.getElementById(k);
+      f("opv-visit_date").value = toLocalInput(v.visit_date);
+      f("opv-visit_type").value = v.visit_type || "OP";
+      f("opv-doctor").value = v.doctor || "";
+      f("opv-department").value = v.department || "";
+      f("opv-symptoms").value = v.symptoms || "";
+      f("opv-examination_findings").value = v.examination_findings || "";
+      f("opv-diagnosis").value = v.diagnosis || "";
+      f("opv-advice").value = v.advice || "";
+      f("opv-follow_up_date").value = v.follow_up_date || "";
+      renderMeds(v.prescription_meds, v.prescription, "rx-rows");
+      f("opv-title").firstChild.textContent = `OP visit — ${fmtDate(v.visit_date)} `;
+      f("opv-print-btn").href = `print-op.html?visit=${encodeURIComponent(v.id)}`;
+      f("opv-detail").style.display = "";
+      f("opv-detail").scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    function closeOpVisit() {
+      CURRENT_OPV = null;
+      document.getElementById("opv-detail").style.display = "none";
+    }
+
+    async function saveOpVisit(e) {
+      if (e) e.preventDefault();
+      if (!CURRENT_OPV) return;
+      const msg = document.getElementById("msg");
+      clearMsg(msg);
+      const val = (id) => document.getElementById(id).value.trim() || null;
+      const payload = {
+        visit_date: fromLocalInput(document.getElementById("opv-visit_date").value),
+        visit_type: document.getElementById("opv-visit_type").value || "OP",
+        doctor: val("opv-doctor"),
+        department: val("opv-department"),
+        symptoms: val("opv-symptoms"),
+        examination_findings: val("opv-examination_findings"),
+        diagnosis: val("opv-diagnosis"),
+        advice: val("opv-advice"),
+        prescription_meds: collectMeds("rx-rows"),
+        follow_up_date: document.getElementById("opv-follow_up_date").value || null,
+      };
+      const { error } = await window.sb.from("op_visits").update(payload).eq("id", CURRENT_OPV.id);
+      if (error) { showMsg(msg, "error", error.message); return; }
+      showMsg(msg, "success", "OP visit saved.");
+      await loadOpVisits(PATIENT.id);
+      openOpVisit(CURRENT_OPV.id);
+    }
+
+    async function createOrOpenOpBill() {
+      if (!CURRENT_OPV) return;
+      const msg = document.getElementById("msg");
+      const { data: existing, error: e1 } = await window.sb
+        .from("bills").select("id").eq("op_visit_id", CURRENT_OPV.id).maybeSingle();
+      if (e1) { showMsg(msg, "error", e1.message); return; }
+      if (existing) { window.location.href = `bill-detail.html?id=${encodeURIComponent(existing.id)}`; return; }
+      const billNo = await generateBillNumber("OP");
+      const { data, error } = await window.sb.from("bills").insert({
+        patient_id: PATIENT.id,
+        op_visit_id: CURRENT_OPV.id,
+        bill_type: "OP",
+        bill_number: billNo,
+        billing_date: new Date().toISOString(),
+        created_by: PROFILE.id,
+      }).select().single();
+      if (error) { showMsg(msg, "error", error.message); return; }
+      window.location.href = `bill-detail.html?id=${encodeURIComponent(data.id)}`;
     }
 
     async function openAdmission(id) {
@@ -846,6 +1093,42 @@
         if (!e.target.classList.contains("med-del")) return;
         e.target.closest("tr").remove();
         if (!document.querySelector("#med-rows tr")) renderMeds([]);
+      });
+
+      // OP visit: new
+      document.getElementById("new-op-visit-btn").addEventListener("click", async () => {
+        const { data, error } = await window.sb.from("op_visits").insert({
+          patient_id: PATIENT.id,
+          visit_date: new Date().toISOString(),
+          doctor: PROFILE.role === "doctor" ? PROFILE.full_name : "",
+          visit_type: "OP",
+          created_by: PROFILE.id,
+        }).select().single();
+        if (error) { showMsg(document.getElementById("msg"), "error", error.message); return; }
+        await loadOpVisits(PATIENT.id);
+        openOpVisit(data.id);
+      });
+      // OP visit: save / close / bill / delete
+      document.getElementById("opv-form").addEventListener("submit", saveOpVisit);
+      document.getElementById("opv-close").addEventListener("click", closeOpVisit);
+      document.getElementById("opv-bill-btn").addEventListener("click", createOrOpenOpBill);
+      document.getElementById("opv-delete").addEventListener("click", async () => {
+        if (!CURRENT_OPV) return;
+        if (!confirm("Delete this OP visit?")) return;
+        const { error } = await window.sb.from("op_visits").delete().eq("id", CURRENT_OPV.id);
+        if (error) { showMsg(document.getElementById("msg"), "error", error.message); return; }
+        closeOpVisit();
+        await loadOpVisits(PATIENT.id);
+      });
+      // Rx: add row
+      document.getElementById("rx-add").addEventListener("click", () => {
+        document.getElementById("rx-rows").insertAdjacentHTML("beforeend", medRowHtml({}));
+      });
+      // Rx: remove row (delegated)
+      document.getElementById("rx-rows").addEventListener("click", (e) => {
+        if (!e.target.classList.contains("med-del")) return;
+        e.target.closest("tr").remove();
+        if (!document.querySelector("#rx-rows tr")) renderMeds([], null, "rx-rows");
       });
 
       // Admission close

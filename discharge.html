@@ -2,17 +2,17 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Discharge Summaries - Ponugoti Hospital</title>
+  <title>Episodes - Ponugoti Hospital</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="style.css" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js"></script>
   <script src="app.js"></script>
   <style>
-    .kpi-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:24px; }
-    .kpi-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:20px; box-shadow:var(--shadow); display:flex; flex-direction:column; }
-    .kpi-card .kpi-val { font-size:28px; font-weight:700; color:var(--primary-dark); margin:8px 0 4px; }
-    .kpi-card .kpi-label { font-size:13px; color:var(--muted); font-weight:500; text-transform:uppercase; letter-spacing:.5px; }
+    .kpi-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:16px; margin-bottom:24px; }
+    .kpi-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:18px; box-shadow:var(--shadow); display:flex; flex-direction:column; }
+    .kpi-card .kpi-val { font-size:26px; font-weight:700; color:var(--primary-dark); margin:6px 0 4px; }
+    .kpi-card .kpi-label { font-size:12px; color:var(--muted); font-weight:500; text-transform:uppercase; letter-spacing:.5px; }
     .kpi-card .kpi-desc { font-size:12px; color:var(--muted); }
     .tabs { display:flex; gap:8px; margin-bottom:16px; border-bottom:1px solid var(--border); padding-bottom:8px; flex-wrap:wrap; }
     .tab { background:none; border:none; font:inherit; font-size:14px; font-weight:500; color:var(--muted); padding:6px 12px; cursor:pointer; border-radius:6px; transition:background .15s,color .15s; }
@@ -21,6 +21,8 @@
     .badge.settled { background:#d1fae5; color:#065f46; }
     .badge.due { background:#fef3c7; color:#92400e; }
     .badge.nobill { background:#eef2f6; color:#5b6678; }
+    .badge.op { background:#e0e7ff; color:#3730a3; }
+    .badge.ip { background:#fef3c7; color:#92400e; }
     .det-head { display:flex; align-items:flex-start; gap:16px; flex-wrap:wrap; }
     .det-actions { display:flex; gap:8px; flex-wrap:wrap; margin-left:auto; }
     .journey { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:10px; margin:14px 0; }
@@ -44,11 +46,12 @@
 <body>
   <div class="container" id="page" style="display:none">
     <div class="page-title">
-      <h1>Discharge Summaries</h1>
+      <h1>Patient Episodes</h1>
       <span class="subtitle" id="count">…</span>
       <div style="flex:1"></div>
       <a class="btn secondary" href="dashboard.html">All patients</a>
     </div>
+    <p class="muted" style="margin:-8px 0 16px;font-size:13px">In-patient admissions (discharge summaries) and outpatient visits, each correlated with its diagnosis, treatment, investigations, medications and billing.</p>
 
     <div id="msg"></div>
 
@@ -61,17 +64,22 @@
       <div class="kpi-card" style="border-left:4px solid var(--accent)">
         <span class="kpi-label">Discharged</span>
         <div class="kpi-val" id="kpi-discharged">—</div>
-        <span class="kpi-desc">Completed discharge episodes</span>
+        <span class="kpi-desc">Completed discharges</span>
       </div>
       <div class="kpi-card" style="border-left:4px solid var(--danger)">
-        <span class="kpi-label">Incomplete summaries</span>
+        <span class="kpi-label">Incomplete</span>
         <div class="kpi-val" id="kpi-incomplete">—</div>
-        <span class="kpi-desc">Discharged but missing key details</span>
+        <span class="kpi-desc">Discharged, missing details</span>
+      </div>
+      <div class="kpi-card" style="border-left:4px solid var(--primary)">
+        <span class="kpi-label">OP visits</span>
+        <div class="kpi-val" id="kpi-op">—</div>
+        <span class="kpi-desc">Outpatient consultations</span>
       </div>
     </div>
 
     <div class="searchbar">
-      <input id="q" type="search" placeholder="Search by patient name, MRN, diagnosis, or doctor..." />
+      <input id="q" type="search" placeholder="Search by patient, MRN, diagnosis, or doctor..." />
     </div>
 
     <div class="tabs">
@@ -79,6 +87,7 @@
       <button class="tab" data-filter="admitted">Admitted now</button>
       <button class="tab" data-filter="discharged">Discharged</button>
       <button class="tab" data-filter="incomplete">Incomplete</button>
+      <button class="tab" data-filter="op">Outpatient</button>
     </div>
 
     <div class="card" style="padding:0;overflow:hidden">
@@ -86,10 +95,10 @@
         <thead>
           <tr>
             <th>Patient</th>
-            <th>Admitted</th>
-            <th>Discharged</th>
+            <th>Type</th>
+            <th>Date</th>
             <th>Diagnosis</th>
-            <th>LOS</th>
+            <th>Doctor</th>
             <th>Billing</th>
             <th>Status</th>
           </tr>
@@ -98,13 +107,13 @@
       </table>
     </div>
 
-    <!-- Correlated detail -->
     <div id="detail" class="card" style="display:none; margin-top:20px"></div>
   </div>
 
   <script>
-    let ADMISSIONS = [];
+    let EPISODES = [];        // { kind:'IP'|'OP', id, rec }
     let BILLS_BY_ADM = {};
+    let BILLS_BY_OPV = {};
     let FILTER = "all";
 
     (async () => {
@@ -112,7 +121,6 @@
       if (!user) return;
       await renderTopbar("discharge");
       document.getElementById("page").style.display = "";
-
       document.getElementById("q").addEventListener("input", renderList);
       document.querySelectorAll(".tab").forEach((t) => {
         t.addEventListener("click", () => {
@@ -122,160 +130,198 @@
           renderList();
         });
       });
-
       await loadAll();
     })();
 
     async function loadAll() {
       const msg = document.getElementById("msg");
       try {
-        const [admRes, billRes] = await Promise.all([
-          window.sb
-            .from("admissions")
+        const [admRes, opvRes, billRes] = await Promise.all([
+          window.sb.from("admissions")
             .select("*, patient:patients(id, mrn, full_name, dob, sex, phone, blood_group, address)")
             .order("admission_date", { ascending: false }),
-          window.sb
-            .from("bills")
-            .select("id, admission_id, bill_number, bill_type, billing_date, total_amount, amount_paid, payment_status, insurance_type, insurance_provider, insurance_approval_status")
-            .not("admission_id", "is", null),
+          window.sb.from("op_visits")
+            .select("*, patient:patients(id, mrn, full_name, dob, sex, phone, blood_group, address)")
+            .order("visit_date", { ascending: false }),
+          window.sb.from("bills")
+            .select("id, admission_id, op_visit_id, bill_number, bill_type, billing_date, total_amount, amount_paid, payment_status, insurance_type, insurance_provider, insurance_approval_status"),
         ]);
         if (admRes.error) throw admRes.error;
+        if (opvRes.error) throw opvRes.error;
         if (billRes.error) throw billRes.error;
-        ADMISSIONS = admRes.data || [];
-        BILLS_BY_ADM = {};
+
+        BILLS_BY_ADM = {}; BILLS_BY_OPV = {};
         (billRes.data || []).forEach((b) => {
-          (BILLS_BY_ADM[b.admission_id] = BILLS_BY_ADM[b.admission_id] || []).push(b);
+          if (b.admission_id) (BILLS_BY_ADM[b.admission_id] = BILLS_BY_ADM[b.admission_id] || []).push(b);
+          else if (b.op_visit_id) (BILLS_BY_OPV[b.op_visit_id] = BILLS_BY_OPV[b.op_visit_id] || []).push(b);
         });
+
+        EPISODES = []
+          .concat((admRes.data || []).map((a) => ({ kind: "IP", id: a.id, rec: a, when: a.admission_date })))
+          .concat((opvRes.data || []).map((v) => ({ kind: "OP", id: v.id, rec: v, when: v.visit_date })))
+          .sort((x, y) => new Date(y.when || 0) - new Date(x.when || 0));
+
         calculateKPIs();
         renderList();
       } catch (e) {
-        showMsg(msg, "error", e.message || "Failed to load discharge records.");
+        showMsg(msg, "error", e.message || "Failed to load episodes.");
         document.getElementById("rows").innerHTML = `<tr><td colspan="7" class="empty">Could not load.</td></tr>`;
       }
     }
 
-    // ----- correlation helpers -----
-    function losDays(a) {
-      if (!a.discharge_date) return null;
-      return Math.max(1, Math.round((new Date(a.discharge_date) - new Date(a.admission_date)) / 86400000));
+    // ----- shared helpers -----
+    function billsFor(ep) {
+      return ep.kind === "IP" ? (BILLS_BY_ADM[ep.id] || []) : (BILLS_BY_OPV[ep.id] || []);
     }
-    function hasMeds(a) {
-      const m = a.discharge_medications;
-      return (Array.isArray(m) && m.length > 0) || !!a.medications;
-    }
-    function hasFollowUp(a) { return !!(a.follow_up_date || a.follow_up); }
-    function billSummary(admId) {
-      const bills = BILLS_BY_ADM[admId] || [];
+    function billSummary(ep) {
+      const bills = billsFor(ep);
       let billed = 0, paid = 0;
       bills.forEach((b) => { billed += Number(b.total_amount || 0); paid += Number(b.amount_paid || 0); });
       return { bills, billed, paid, balance: billed - paid };
     }
-    // Completeness of the discharge episode (only meaningful once discharged).
-    function completeness(a) {
-      const items = [
-        { key: "Discharge date", ok: !!a.discharge_date },
-        { key: "Final diagnosis", ok: !!a.final_diagnosis },
-        { key: "Condition at discharge", ok: !!a.condition_at_discharge },
-        { key: "Medications", ok: hasMeds(a) },
-        { key: "Follow-up", ok: hasFollowUp(a) },
-        { key: "Bill settled", ok: billSummary(a.id).bills.length > 0 && billSummary(a.id).balance <= 0 },
-      ];
-      // Clinical completeness drives the "incomplete" flag (billing shown but not blocking).
-      const clinicalOk = a.discharge_date && a.final_diagnosis && a.condition_at_discharge && hasMeds(a) && hasFollowUp(a);
-      return { items, clinicalOk: !!clinicalOk };
-    }
-    function statusOf(a) {
-      if (!a.discharge_date) return { key: "admitted", label: "Admitted", cls: "admitted" };
-      return completeness(a).clinicalOk
-        ? { key: "discharged", label: "Discharged", cls: "discharged" }
-        : { key: "incomplete", label: "Incomplete", cls: "incomplete" };
-    }
-    function billBadge(admId) {
-      const s = billSummary(admId);
+    function billBadge(ep) {
+      const s = billSummary(ep);
       if (s.bills.length === 0) return `<span class="badge nobill">No bill</span>`;
       if (s.balance <= 0) return `<span class="badge settled">Settled</span>`;
       return `<span class="badge due">₹${s.balance.toLocaleString("en-IN")} due</span>`;
     }
+    function losDays(a) {
+      if (!a.discharge_date) return null;
+      return Math.max(1, Math.round((new Date(a.discharge_date) - new Date(a.admission_date)) / 86400000));
+    }
+    function ipHasMeds(a) {
+      return (Array.isArray(a.discharge_medications) && a.discharge_medications.length > 0) || !!a.medications;
+    }
+    function ipClinicalOk(a) {
+      return !!(a.discharge_date && a.final_diagnosis && a.condition_at_discharge && ipHasMeds(a) &&
+                (a.follow_up_date || a.follow_up));
+    }
+    function statusOf(ep) {
+      if (ep.kind === "OP") return { key: "op", label: "OP visit", cls: "op" };
+      const a = ep.rec;
+      if (!a.discharge_date) return { key: "admitted", label: "Admitted", cls: "admitted" };
+      return ipClinicalOk(a)
+        ? { key: "discharged", label: "Discharged", cls: "discharged" }
+        : { key: "incomplete", label: "Incomplete", cls: "incomplete" };
+    }
+    function epDiagnosis(ep) {
+      return ep.kind === "IP" ? (ep.rec.final_diagnosis || ep.rec.provisional_diagnosis || "—") : (ep.rec.diagnosis || "—");
+    }
+    function epDoctor(ep) { return ep.kind === "IP" ? (ep.rec.admitting_doctor || "—") : (ep.rec.doctor || "—"); }
 
     function calculateKPIs() {
-      let admitted = 0, discharged = 0, incomplete = 0;
-      ADMISSIONS.forEach((a) => {
-        const s = statusOf(a);
-        if (s.key === "admitted") admitted++;
-        else if (s.key === "discharged") discharged++;
-        else incomplete++;
+      let admitted = 0, discharged = 0, incomplete = 0, op = 0;
+      EPISODES.forEach((ep) => {
+        const k = statusOf(ep).key;
+        if (k === "admitted") admitted++;
+        else if (k === "discharged") discharged++;
+        else if (k === "incomplete") incomplete++;
+        else if (k === "op") op++;
       });
       document.getElementById("kpi-admitted").textContent = String(admitted);
       document.getElementById("kpi-discharged").textContent = String(discharged);
       document.getElementById("kpi-incomplete").textContent = String(incomplete);
-      document.getElementById("count").textContent = `(${ADMISSIONS.length} episodes)`;
+      document.getElementById("kpi-op").textContent = String(op);
+      document.getElementById("count").textContent = `(${EPISODES.length} episodes)`;
     }
 
     function renderList() {
       const q = document.getElementById("q").value.trim().toLowerCase();
       const rows = document.getElementById("rows");
-      const filtered = ADMISSIONS.filter((a) => {
-        const s = statusOf(a);
-        if (FILTER !== "all" && s.key !== FILTER) return false;
+      const filtered = EPISODES.filter((ep) => {
+        if (FILTER !== "all" && statusOf(ep).key !== FILTER) return false;
         if (!q) return true;
-        const p = a.patient || {};
+        const p = ep.rec.patient || {};
         return (
           (p.full_name || "").toLowerCase().includes(q) ||
           (p.mrn || "").toLowerCase().includes(q) ||
-          (a.final_diagnosis || "").toLowerCase().includes(q) ||
-          (a.provisional_diagnosis || "").toLowerCase().includes(q) ||
-          (a.admitting_doctor || "").toLowerCase().includes(q)
+          epDiagnosis(ep).toLowerCase().includes(q) ||
+          epDoctor(ep).toLowerCase().includes(q)
         );
       });
       if (filtered.length === 0) {
         rows.innerHTML = `<tr><td colspan="7" class="empty">No matching episodes.</td></tr>`;
         return;
       }
-      rows.innerHTML = filtered.map((a) => {
-        const p = a.patient || {};
-        const s = statusOf(a);
-        const dx = a.final_diagnosis || a.provisional_diagnosis || "—";
-        const los = losDays(a);
+      rows.innerHTML = filtered.map((ep) => {
+        const p = ep.rec.patient || {};
+        const s = statusOf(ep);
+        const dx = epDiagnosis(ep);
+        const typeBadge = ep.kind === "IP" ? `<span class="badge ip">IP</span>` : `<span class="badge op">OP</span>`;
         return `
-          <tr class="clickable" data-id="${escapeHtml(a.id)}">
+          <tr class="clickable" data-kind="${ep.kind}" data-id="${escapeHtml(ep.id)}">
             <td><strong>${escapeHtml(p.full_name || "—")}</strong><br/><small class="muted">${escapeHtml(p.mrn || "")}</small></td>
-            <td>${a.admission_date ? fmtDate(a.admission_date) : "—"}</td>
-            <td>${a.discharge_date ? fmtDate(a.discharge_date) : '<span class="muted">In hospital</span>'}</td>
-            <td>${escapeHtml(dx.length > 60 ? dx.slice(0, 60) + "…" : dx)}</td>
-            <td>${los ? los + "d" : "—"}</td>
-            <td>${billBadge(a.id)}</td>
+            <td>${typeBadge}</td>
+            <td>${ep.when ? fmtDate(ep.when) : "—"}</td>
+            <td>${escapeHtml(dx.length > 55 ? dx.slice(0, 55) + "…" : dx)}</td>
+            <td>${escapeHtml(epDoctor(ep))}</td>
+            <td>${billBadge(ep)}</td>
             <td><span class="badge ${s.cls}">${s.label}</span></td>
           </tr>`;
       }).join("");
       rows.querySelectorAll("tr.clickable").forEach((tr) => {
-        tr.addEventListener("click", () => openDetail(tr.dataset.id));
+        tr.addEventListener("click", () => openDetail(tr.dataset.kind, tr.dataset.id));
       });
     }
 
-    async function openDetail(admId) {
-      const a = ADMISSIONS.find((x) => x.id === admId);
-      if (!a) return;
-      const p = a.patient || {};
+    function openDetail(kind, id) {
+      const ep = EPISODES.find((x) => x.kind === kind && x.id === id);
+      if (!ep) return;
+      if (kind === "IP") openIpDetail(ep);
+      else openOpDetail(ep);
+    }
+
+    function billPanel(ep, patientId) {
+      const bs = billSummary(ep);
+      if (bs.bills.length === 0) {
+        const link = ep.kind === "IP"
+          ? `patient.html?id=${encodeURIComponent(patientId)}&adm=${encodeURIComponent(ep.id)}`
+          : `patient.html?id=${encodeURIComponent(patientId)}&opv=${encodeURIComponent(ep.id)}`;
+        return `<p class="muted">No bill linked to this episode. <a href="${link}">Create one from the patient page →</a></p>`;
+      }
+      const rows = bs.bills.map((b) => {
+        const bal = Number(b.total_amount || 0) - Number(b.amount_paid || 0);
+        const ins = b.insurance_type && b.insurance_type !== "Self-Pay"
+          ? `${escapeHtml(b.insurance_provider || b.insurance_type)} <small class="muted">(${escapeHtml(b.insurance_approval_status || "")})</small>`
+          : `<span class="muted">Self-Pay</span>`;
+        return `<tr>
+          <td><strong>${escapeHtml(b.bill_number)}</strong></td>
+          <td>${escapeHtml(b.bill_type)}</td>
+          <td>${fmtDate(b.billing_date)}</td>
+          <td style="text-align:right">₹${Number(b.total_amount || 0).toLocaleString("en-IN")}</td>
+          <td style="text-align:right">₹${Number(b.amount_paid || 0).toLocaleString("en-IN")}</td>
+          <td style="text-align:right">₹${bal.toLocaleString("en-IN")}</td>
+          <td><span class="badge ${b.payment_status === "Paid" ? "discharged" : "admitted"}">${escapeHtml(b.payment_status)}</span></td>
+          <td>${ins}</td>
+          <td><a class="btn small secondary" href="bill-detail.html?id=${encodeURIComponent(b.id)}">Open</a></td>
+        </tr>`;
+      }).join("");
+      return `<table class="data"><thead><tr><th>Bill #</th><th>Type</th><th>Date</th><th style="text-align:right">Total</th><th style="text-align:right">Paid</th><th style="text-align:right">Balance</th><th>Status</th><th>Insurance / Scheme</th><th></th></tr></thead><tbody>${rows}</tbody></table>
+        <div class="bill-totals">
+          <span>Billed: <b>₹${bs.billed.toLocaleString("en-IN")}</b></span>
+          <span>Paid: <b>₹${bs.paid.toLocaleString("en-IN")}</b></span>
+          <span>Balance: <b style="color:${bs.balance > 0 ? "var(--danger)" : "var(--accent)"}">₹${bs.balance.toLocaleString("en-IN")}</b></span>
+        </div>`;
+    }
+
+    const secOf = (title, body) => body
+      ? `<div class="clin"><h3>${escapeHtml(title)}</h3><div class="body">${escapeHtml(body)}</div></div>` : "";
+
+    async function openIpDetail(ep) {
+      const a = ep.rec, p = a.patient || {};
       const det = document.getElementById("detail");
       det.style.display = "";
       det.innerHTML = `<p class="muted">Loading investigations…</p>`;
       det.scrollIntoView({ behavior: "smooth", block: "start" });
 
-      const { data: inv } = await window.sb
-        .from("investigations").select("*").eq("admission_id", admId)
-        .order("performed_at", { ascending: true });
+      const { data: inv } = await window.sb.from("investigations").select("*")
+        .eq("admission_id", ep.id).order("performed_at", { ascending: true });
 
       const age = p.dob ? ageFromDob(p.dob) + "y" : "";
       const ageSex = [age, p.sex].filter(Boolean).join(" / ");
       const los = losDays(a);
-      const bs = billSummary(admId);
-      const comp = completeness(a);
-
-      const sec = (title, body) => body
-        ? `<div class="clin"><h3>${escapeHtml(title)}</h3><div class="body">${escapeHtml(body)}</div></div>` : "";
       const j = (k, v) => `<div class="j"><div class="k">${escapeHtml(k)}</div><div class="v">${v}</div></div>`;
 
-      // discharge medications
       const meds = Array.isArray(a.discharge_medications) ? a.discharge_medications : [];
       let medsHtml = "";
       if (meds.length) {
@@ -286,11 +332,8 @@
             <td>${escapeHtml(m.dose || "")}</td><td>${escapeHtml(m.route || "")}</td>
             <td>${escapeHtml(m.frequency || "")}</td><td>${escapeHtml(m.duration || "")}</td>
             <td>${escapeHtml(m.instructions || "")}</td></tr>`).join("")}</tbody></table></div>`;
-      } else if (a.medications) {
-        medsHtml = sec("Discharge medications", a.medications);
-      }
+      } else if (a.medications) { medsHtml = secOf("Discharge medications", a.medications); }
 
-      // investigations
       const invHtml = (inv && inv.length)
         ? `<div class="clin"><h3>Investigations (${inv.length})</h3>
             <table class="data"><thead><tr><th>Date</th><th>Test</th><th>Value</th><th>Units</th><th>Normal range</th><th>Comments</th></tr></thead>
@@ -300,44 +343,20 @@
               <td>${escapeHtml(i.normal_range || "")}</td><td>${escapeHtml(i.comments || "")}</td></tr>`).join("")}</tbody></table></div>`
         : "";
 
-      // billing correlation
-      let billHtml;
-      if (bs.bills.length === 0) {
-        billHtml = `<p class="muted">No bill linked to this admission. <a href="patient.html?id=${encodeURIComponent(p.id)}&adm=${encodeURIComponent(a.id)}">Create one from the patient page →</a></p>`;
-      } else {
-        billHtml = `<table class="data"><thead><tr><th>Bill #</th><th>Type</th><th>Date</th><th style="text-align:right">Total</th><th style="text-align:right">Paid</th><th style="text-align:right">Balance</th><th>Status</th><th>Insurance / Scheme</th><th></th></tr></thead>
-          <tbody>${bs.bills.map((b) => {
-            const bal = Number(b.total_amount || 0) - Number(b.amount_paid || 0);
-            const ins = b.insurance_type && b.insurance_type !== "Self-Pay"
-              ? `${escapeHtml(b.insurance_provider || b.insurance_type)} <small class="muted">(${escapeHtml(b.insurance_approval_status || "")})</small>`
-              : `<span class="muted">Self-Pay</span>`;
-            return `<tr>
-              <td><strong>${escapeHtml(b.bill_number)}</strong></td>
-              <td>${escapeHtml(b.bill_type)}</td>
-              <td>${fmtDate(b.billing_date)}</td>
-              <td style="text-align:right">₹${Number(b.total_amount || 0).toLocaleString("en-IN")}</td>
-              <td style="text-align:right">₹${Number(b.amount_paid || 0).toLocaleString("en-IN")}</td>
-              <td style="text-align:right">₹${bal.toLocaleString("en-IN")}</td>
-              <td><span class="badge ${b.payment_status === "Paid" ? "discharged" : "admitted"}">${escapeHtml(b.payment_status)}</span></td>
-              <td>${ins}</td>
-              <td><a class="btn small secondary" href="bill-detail.html?id=${encodeURIComponent(b.id)}">Open</a></td>
-            </tr>`;
-          }).join("")}</tbody></table>
-          <div class="bill-totals">
-            <span>Billed: <b>₹${bs.billed.toLocaleString("en-IN")}</b></span>
-            <span>Paid: <b>₹${bs.paid.toLocaleString("en-IN")}</b></span>
-            <span>Balance: <b style="color:${bs.balance > 0 ? "var(--danger)" : "var(--accent)"}">₹${bs.balance.toLocaleString("en-IN")}</b></span>
-          </div>`;
-      }
-
-      const checksHtml = comp.items.map((c) =>
-        `<span class="chk ${c.ok ? "ok" : "no"}">${c.ok ? "✓" : "✗"} ${escapeHtml(c.key)}</span>`).join("");
+      const checks = [
+        { key: "Discharge date", ok: !!a.discharge_date },
+        { key: "Final diagnosis", ok: !!a.final_diagnosis },
+        { key: "Condition at discharge", ok: !!a.condition_at_discharge },
+        { key: "Medications", ok: ipHasMeds(a) },
+        { key: "Follow-up", ok: !!(a.follow_up_date || a.follow_up) },
+        { key: "Bill settled", ok: billSummary(ep).bills.length > 0 && billSummary(ep).balance <= 0 },
+      ];
+      const checksHtml = checks.map((c) => `<span class="chk ${c.ok ? "ok" : "no"}">${c.ok ? "✓" : "✗"} ${escapeHtml(c.key)}</span>`).join("");
 
       const dxHtml = (a.final_diagnosis || a.provisional_diagnosis)
         ? `<div class="dx-block"><div class="lbl">Final diagnosis</div>
             <div class="val">${escapeHtml(a.final_diagnosis || "— (not yet recorded)")}</div>
-            ${a.provisional_diagnosis ? `<div class="prov"><b>Provisional:</b> ${escapeHtml(a.provisional_diagnosis)}</div>` : ""}</div>`
-        : "";
+            ${a.provisional_diagnosis ? `<div class="prov"><b>Provisional:</b> ${escapeHtml(a.provisional_diagnosis)}</div>` : ""}</div>` : "";
 
       const followBits = [];
       if (a.follow_up_date) followBits.push("Review on " + fmtDate(a.follow_up_date));
@@ -346,16 +365,15 @@
       det.innerHTML = `
         <div class="det-head">
           <div>
-            <h2 style="margin:0">${escapeHtml(p.full_name || "—")}</h2>
+            <h2 style="margin:0">${escapeHtml(p.full_name || "—")} <span class="badge ip">In-patient</span></h2>
             <div class="muted" style="font-size:13px">MRN ${escapeHtml(p.mrn || "—")} · ${escapeHtml(ageSex || "—")} · ${escapeHtml(p.phone || "—")}${p.blood_group ? " · " + escapeHtml(p.blood_group) : ""}</div>
           </div>
           <div class="det-actions">
-            <a class="btn" target="_blank" href="print-discharge.html?adm=${encodeURIComponent(a.id)}">Print discharge summary</a>
-            <a class="btn secondary" href="patient.html?id=${encodeURIComponent(p.id)}&adm=${encodeURIComponent(a.id)}">Edit clinical details</a>
+            <a class="btn" target="_blank" href="print-discharge.html?adm=${encodeURIComponent(ep.id)}">Print discharge summary</a>
+            <a class="btn secondary" href="patient.html?id=${encodeURIComponent(p.id)}&adm=${encodeURIComponent(ep.id)}">Edit clinical details</a>
             <button class="btn secondary" id="det-close">Close</button>
           </div>
         </div>
-
         <div class="journey">
           ${j("Admitted", a.admission_date ? fmtDateTime(a.admission_date) : "—")}
           ${j("Discharged", a.discharge_date ? fmtDateTime(a.discharge_date) : '<span class="muted">In hospital</span>')}
@@ -364,29 +382,76 @@
           ${j("Doctor", escapeHtml(a.admitting_doctor || "—"))}
           ${j("Type", escapeHtml(a.admission_type || "IP"))}
         </div>
-
-        <h3 class="clin" style="margin-top:6px"><span style="font-size:12px;text-transform:uppercase;letter-spacing:.4px;color:var(--primary-dark)">Discharge readiness</span></h3>
         <div class="check-row">${checksHtml}</div>
-
         ${dxHtml}
-
-        ${sec("Chief complaints", a.chief_complaints)}
-        ${sec("History of present illness", a.history_present_illness)}
-        ${sec("Past history / comorbidities", a.past_history)}
-        ${sec("Known allergies", a.allergies)}
-        ${sec("Examination & vitals on admission", a.examination_findings)}
+        ${secOf("Chief complaints", a.chief_complaints)}
+        ${secOf("History of present illness", a.history_present_illness)}
+        ${secOf("Past history / comorbidities", a.past_history)}
+        ${secOf("Known allergies", a.allergies)}
+        ${secOf("Examination & vitals on admission", a.examination_findings)}
         ${invHtml}
-        ${sec("Course in hospital", a.course_in_hospital)}
-        ${sec("Procedures / surgery performed", a.procedures)}
-        ${sec("Treatment given", a.treatment_given)}
-        ${sec("Condition at discharge", a.condition_at_discharge)}
+        ${secOf("Course in hospital", a.course_in_hospital)}
+        ${secOf("Procedures / surgery performed", a.procedures)}
+        ${secOf("Treatment given", a.treatment_given)}
+        ${secOf("Condition at discharge", a.condition_at_discharge)}
         ${medsHtml}
-        ${sec("Diet & activity advice", a.diet_activity_advice)}
-        ${followBits.length ? sec("Follow-up", followBits.join(" — ")) : ""}
-        ${sec("Report immediately if (warning signs)", a.warning_signs)}
-        ${sec("Additional clinical remarks", a.discharge_summary)}
+        ${secOf("Diet & activity advice", a.diet_activity_advice)}
+        ${followBits.length ? secOf("Follow-up", followBits.join(" — ")) : ""}
+        ${secOf("Report immediately if (warning signs)", a.warning_signs)}
+        ${secOf("Additional clinical remarks", a.discharge_summary)}
+        <div class="clin"><h3>Billing for this admission</h3>${billPanel(ep, p.id)}</div>
+      `;
+      document.getElementById("det-close").addEventListener("click", () => { det.style.display = "none"; });
+    }
 
-        <div class="clin"><h3>Billing for this admission</h3>${billHtml}</div>
+    function openOpDetail(ep) {
+      const v = ep.rec, p = v.patient || {};
+      const det = document.getElementById("detail");
+      const age = p.dob ? ageFromDob(p.dob) + "y" : "";
+      const ageSex = [age, p.sex].filter(Boolean).join(" / ");
+      const j = (k, val) => `<div class="j"><div class="k">${escapeHtml(k)}</div><div class="v">${val}</div></div>`;
+
+      const rx = Array.isArray(v.prescription_meds) ? v.prescription_meds : [];
+      let rxHtml = "";
+      if (rx.length) {
+        rxHtml = `<div class="clin"><h3>Prescription (Rx)</h3>
+          <table class="data"><thead><tr><th>Drug</th><th>Strength</th><th>Dose</th><th>Route</th><th>Frequency</th><th>Duration</th><th>Instructions</th></tr></thead>
+          <tbody>${rx.map((m) => `<tr>
+            <td><strong>${escapeHtml(m.drug || "")}</strong></td><td>${escapeHtml(m.strength || "")}</td>
+            <td>${escapeHtml(m.dose || "")}</td><td>${escapeHtml(m.route || "")}</td>
+            <td>${escapeHtml(m.frequency || "")}</td><td>${escapeHtml(m.duration || "")}</td>
+            <td>${escapeHtml(m.instructions || "")}</td></tr>`).join("")}</tbody></table></div>`;
+      } else if (v.prescription) { rxHtml = secOf("Prescription", v.prescription); }
+
+      const dxHtml = v.diagnosis
+        ? `<div class="dx-block"><div class="lbl">Diagnosis</div><div class="val">${escapeHtml(v.diagnosis)}</div></div>` : "";
+
+      det.style.display = "";
+      det.innerHTML = `
+        <div class="det-head">
+          <div>
+            <h2 style="margin:0">${escapeHtml(p.full_name || "—")} <span class="badge op">Outpatient</span></h2>
+            <div class="muted" style="font-size:13px">MRN ${escapeHtml(p.mrn || "—")} · ${escapeHtml(ageSex || "—")} · ${escapeHtml(p.phone || "—")}</div>
+          </div>
+          <div class="det-actions">
+            <a class="btn" target="_blank" href="print-op.html?visit=${encodeURIComponent(ep.id)}">Print visit summary</a>
+            <a class="btn secondary" href="patient.html?id=${encodeURIComponent(p.id)}&opv=${encodeURIComponent(ep.id)}">Edit visit</a>
+            <button class="btn secondary" id="det-close">Close</button>
+          </div>
+        </div>
+        <div class="journey">
+          ${j("Visit date", v.visit_date ? fmtDateTime(v.visit_date) : "—")}
+          ${j("Type", escapeHtml(v.visit_type || "OP"))}
+          ${j("Doctor", escapeHtml(v.doctor || "—"))}
+          ${j("Department", escapeHtml(v.department || "—"))}
+          ${j("Follow-up", v.follow_up_date ? fmtDate(v.follow_up_date) : "—")}
+        </div>
+        ${dxHtml}
+        ${secOf("Symptoms / complaints", v.symptoms)}
+        ${secOf("Examination & vitals", v.examination_findings)}
+        ${secOf("Advice", v.advice)}
+        ${rxHtml}
+        <div class="clin"><h3>Billing for this visit</h3>${billPanel(ep, p.id)}</div>
       `;
       document.getElementById("det-close").addEventListener("click", () => { det.style.display = "none"; });
     }
