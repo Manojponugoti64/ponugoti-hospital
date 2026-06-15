@@ -151,6 +151,7 @@ async function renderTopbar(activePage) {
     { page: 'new-patient',  href: 'new-patient.html',  icon: 'ti-user-plus',        label: 'New Patient' },
     { page: 'billing',      href: 'billing.html',      icon: 'ti-receipt',          label: 'Billing'     },
     { page: 'insurance',    href: 'insurance.html',    icon: 'ti-shield-check',     label: 'Insurance'   },
+    { page: 'discharge',    href: 'discharge.html',    icon: 'ti-report-medical',   label: 'Discharge'   },
     { page: 'admin',        href: 'admin.html',        icon: 'ti-users',            label: 'Staff'       },
   ];
 

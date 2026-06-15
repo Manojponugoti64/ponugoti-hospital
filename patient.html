@@ -393,6 +393,10 @@
       }
       bindHandlers();
       applyRoleGating();
+
+      // Deep link from the Discharge hub: ?adm=<id> auto-opens that admission.
+      const admParam = new URLSearchParams(window.location.search).get("adm");
+      if (admParam) await openAdmission(admParam);
     })();
 
     function applyRoleGating() {

@@ -1,0 +1,395 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Discharge Summaries - Ponugoti Hospital</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+  <style>
+    .kpi-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:24px; }
+    .kpi-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:20px; box-shadow:var(--shadow); display:flex; flex-direction:column; }
+    .kpi-card .kpi-val { font-size:28px; font-weight:700; color:var(--primary-dark); margin:8px 0 4px; }
+    .kpi-card .kpi-label { font-size:13px; color:var(--muted); font-weight:500; text-transform:uppercase; letter-spacing:.5px; }
+    .kpi-card .kpi-desc { font-size:12px; color:var(--muted); }
+    .tabs { display:flex; gap:8px; margin-bottom:16px; border-bottom:1px solid var(--border); padding-bottom:8px; flex-wrap:wrap; }
+    .tab { background:none; border:none; font:inherit; font-size:14px; font-weight:500; color:var(--muted); padding:6px 12px; cursor:pointer; border-radius:6px; transition:background .15s,color .15s; }
+    .tab.active, .tab:hover { background:#e0e7ff; color:#3730a3; }
+    .badge.incomplete { background:#fee2e2; color:#991b1b; }
+    .badge.settled { background:#d1fae5; color:#065f46; }
+    .badge.due { background:#fef3c7; color:#92400e; }
+    .badge.nobill { background:#eef2f6; color:#5b6678; }
+    .det-head { display:flex; align-items:flex-start; gap:16px; flex-wrap:wrap; }
+    .det-actions { display:flex; gap:8px; flex-wrap:wrap; margin-left:auto; }
+    .journey { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:10px; margin:14px 0; }
+    .journey .j { background:#f8fafc; border:1px solid var(--border); border-radius:8px; padding:10px 12px; }
+    .journey .j .k { font-size:11px; text-transform:uppercase; letter-spacing:.4px; color:var(--muted); font-weight:600; }
+    .journey .j .v { font-size:14px; margin-top:2px; }
+    .check-row { display:flex; flex-wrap:wrap; gap:8px; margin:6px 0 4px; }
+    .chk { display:inline-flex; align-items:center; gap:6px; font-size:13px; padding:4px 10px; border-radius:999px; }
+    .chk.ok { background:#d1fae5; color:#065f46; }
+    .chk.no { background:#fee2e2; color:#991b1b; }
+    .clin h3 { font-size:12px; text-transform:uppercase; letter-spacing:.4px; color:var(--primary-dark); border-bottom:1px solid var(--border); padding-bottom:3px; margin:14px 0 6px; }
+    .clin .body { font-size:14px; white-space:pre-wrap; line-height:1.5; }
+    .dx-block { border:1px solid var(--primary); background:#f3f8fd; border-radius:8px; padding:12px 14px; margin:12px 0; }
+    .dx-block .lbl { font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); font-weight:600; }
+    .dx-block .val { font-size:16px; font-weight:600; color:var(--primary-dark); white-space:pre-wrap; margin-top:2px; }
+    .dx-block .prov { font-size:13px; color:var(--muted); margin-top:6px; white-space:pre-wrap; }
+    .bill-totals { display:flex; gap:20px; flex-wrap:wrap; margin-top:10px; font-size:14px; }
+    .bill-totals b { color:var(--primary-dark); }
+  </style>
+</head>
+<body>
+  <div class="container" id="page" style="display:none">
+    <div class="page-title">
+      <h1>Discharge Summaries</h1>
+      <span class="subtitle" id="count">…</span>
+      <div style="flex:1"></div>
+      <a class="btn secondary" href="dashboard.html">All patients</a>
+    </div>
+
+    <div id="msg"></div>
+
+    <div class="kpi-grid">
+      <div class="kpi-card" style="border-left:4px solid var(--warning)">
+        <span class="kpi-label">Currently admitted</span>
+        <div class="kpi-val" id="kpi-admitted">—</div>
+        <span class="kpi-desc">In-patients awaiting discharge</span>
+      </div>
+      <div class="kpi-card" style="border-left:4px solid var(--accent)">
+        <span class="kpi-label">Discharged</span>
+        <div class="kpi-val" id="kpi-discharged">—</div>
+        <span class="kpi-desc">Completed discharge episodes</span>
+      </div>
+      <div class="kpi-card" style="border-left:4px solid var(--danger)">
+        <span class="kpi-label">Incomplete summaries</span>
+        <div class="kpi-val" id="kpi-incomplete">—</div>
+        <span class="kpi-desc">Discharged but missing key details</span>
+      </div>
+    </div>
+
+    <div class="searchbar">
+      <input id="q" type="search" placeholder="Search by patient name, MRN, diagnosis, or doctor..." />
+    </div>
+
+    <div class="tabs">
+      <button class="tab active" data-filter="all">All</button>
+      <button class="tab" data-filter="admitted">Admitted now</button>
+      <button class="tab" data-filter="discharged">Discharged</button>
+      <button class="tab" data-filter="incomplete">Incomplete</button>
+    </div>
+
+    <div class="card" style="padding:0;overflow:hidden">
+      <table class="data" id="tbl">
+        <thead>
+          <tr>
+            <th>Patient</th>
+            <th>Admitted</th>
+            <th>Discharged</th>
+            <th>Diagnosis</th>
+            <th>LOS</th>
+            <th>Billing</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="rows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody>
+      </table>
+    </div>
+
+    <!-- Correlated detail -->
+    <div id="detail" class="card" style="display:none; margin-top:20px"></div>
+  </div>
+
+  <script>
+    let ADMISSIONS = [];
+    let BILLS_BY_ADM = {};
+    let FILTER = "all";
+
+    (async () => {
+      const user = await requireAuth();
+      if (!user) return;
+      await renderTopbar("discharge");
+      document.getElementById("page").style.display = "";
+
+      document.getElementById("q").addEventListener("input", renderList);
+      document.querySelectorAll(".tab").forEach((t) => {
+        t.addEventListener("click", () => {
+          document.querySelectorAll(".tab").forEach((x) => x.classList.remove("active"));
+          t.classList.add("active");
+          FILTER = t.dataset.filter;
+          renderList();
+        });
+      });
+
+      await loadAll();
+    })();
+
+    async function loadAll() {
+      const msg = document.getElementById("msg");
+      try {
+        const [admRes, billRes] = await Promise.all([
+          window.sb
+            .from("admissions")
+            .select("*, patient:patients(id, mrn, full_name, dob, sex, phone, blood_group, address)")
+            .order("admission_date", { ascending: false }),
+          window.sb
+            .from("bills")
+            .select("id, admission_id, bill_number, bill_type, billing_date, total_amount, amount_paid, payment_status, insurance_type, insurance_provider, insurance_approval_status")
+            .not("admission_id", "is", null),
+        ]);
+        if (admRes.error) throw admRes.error;
+        if (billRes.error) throw billRes.error;
+        ADMISSIONS = admRes.data || [];
+        BILLS_BY_ADM = {};
+        (billRes.data || []).forEach((b) => {
+          (BILLS_BY_ADM[b.admission_id] = BILLS_BY_ADM[b.admission_id] || []).push(b);
+        });
+        calculateKPIs();
+        renderList();
+      } catch (e) {
+        showMsg(msg, "error", e.message || "Failed to load discharge records.");
+        document.getElementById("rows").innerHTML = `<tr><td colspan="7" class="empty">Could not load.</td></tr>`;
+      }
+    }
+
+    // ----- correlation helpers -----
+    function losDays(a) {
+      if (!a.discharge_date) return null;
+      return Math.max(1, Math.round((new Date(a.discharge_date) - new Date(a.admission_date)) / 86400000));
+    }
+    function hasMeds(a) {
+      const m = a.discharge_medications;
+      return (Array.isArray(m) && m.length > 0) || !!a.medications;
+    }
+    function hasFollowUp(a) { return !!(a.follow_up_date || a.follow_up); }
+    function billSummary(admId) {
+      const bills = BILLS_BY_ADM[admId] || [];
+      let billed = 0, paid = 0;
+      bills.forEach((b) => { billed += Number(b.total_amount || 0); paid += Number(b.amount_paid || 0); });
+      return { bills, billed, paid, balance: billed - paid };
+    }
+    // Completeness of the discharge episode (only meaningful once discharged).
+    function completeness(a) {
+      const items = [
+        { key: "Discharge date", ok: !!a.discharge_date },
+        { key: "Final diagnosis", ok: !!a.final_diagnosis },
+        { key: "Condition at discharge", ok: !!a.condition_at_discharge },
+        { key: "Medications", ok: hasMeds(a) },
+        { key: "Follow-up", ok: hasFollowUp(a) },
+        { key: "Bill settled", ok: billSummary(a.id).bills.length > 0 && billSummary(a.id).balance <= 0 },
+      ];
+      // Clinical completeness drives the "incomplete" flag (billing shown but not blocking).
+      const clinicalOk = a.discharge_date && a.final_diagnosis && a.condition_at_discharge && hasMeds(a) && hasFollowUp(a);
+      return { items, clinicalOk: !!clinicalOk };
+    }
+    function statusOf(a) {
+      if (!a.discharge_date) return { key: "admitted", label: "Admitted", cls: "admitted" };
+      return completeness(a).clinicalOk
+        ? { key: "discharged", label: "Discharged", cls: "discharged" }
+        : { key: "incomplete", label: "Incomplete", cls: "incomplete" };
+    }
+    function billBadge(admId) {
+      const s = billSummary(admId);
+      if (s.bills.length === 0) return `<span class="badge nobill">No bill</span>`;
+      if (s.balance <= 0) return `<span class="badge settled">Settled</span>`;
+      return `<span class="badge due">₹${s.balance.toLocaleString("en-IN")} due</span>`;
+    }
+
+    function calculateKPIs() {
+      let admitted = 0, discharged = 0, incomplete = 0;
+      ADMISSIONS.forEach((a) => {
+        const s = statusOf(a);
+        if (s.key === "admitted") admitted++;
+        else if (s.key === "discharged") discharged++;
+        else incomplete++;
+      });
+      document.getElementById("kpi-admitted").textContent = String(admitted);
+      document.getElementById("kpi-discharged").textContent = String(discharged);
+      document.getElementById("kpi-incomplete").textContent = String(incomplete);
+      document.getElementById("count").textContent = `(${ADMISSIONS.length} episodes)`;
+    }
+
+    function renderList() {
+      const q = document.getElementById("q").value.trim().toLowerCase();
+      const rows = document.getElementById("rows");
+      const filtered = ADMISSIONS.filter((a) => {
+        const s = statusOf(a);
+        if (FILTER !== "all" && s.key !== FILTER) return false;
+        if (!q) return true;
+        const p = a.patient || {};
+        return (
+          (p.full_name || "").toLowerCase().includes(q) ||
+          (p.mrn || "").toLowerCase().includes(q) ||
+          (a.final_diagnosis || "").toLowerCase().includes(q) ||
+          (a.provisional_diagnosis || "").toLowerCase().includes(q) ||
+          (a.admitting_doctor || "").toLowerCase().includes(q)
+        );
+      });
+      if (filtered.length === 0) {
+        rows.innerHTML = `<tr><td colspan="7" class="empty">No matching episodes.</td></tr>`;
+        return;
+      }
+      rows.innerHTML = filtered.map((a) => {
+        const p = a.patient || {};
+        const s = statusOf(a);
+        const dx = a.final_diagnosis || a.provisional_diagnosis || "—";
+        const los = losDays(a);
+        return `
+          <tr class="clickable" data-id="${escapeHtml(a.id)}">
+            <td><strong>${escapeHtml(p.full_name || "—")}</strong><br/><small class="muted">${escapeHtml(p.mrn || "")}</small></td>
+            <td>${a.admission_date ? fmtDate(a.admission_date) : "—"}</td>
+            <td>${a.discharge_date ? fmtDate(a.discharge_date) : '<span class="muted">In hospital</span>'}</td>
+            <td>${escapeHtml(dx.length > 60 ? dx.slice(0, 60) + "…" : dx)}</td>
+            <td>${los ? los + "d" : "—"}</td>
+            <td>${billBadge(a.id)}</td>
+            <td><span class="badge ${s.cls}">${s.label}</span></td>
+          </tr>`;
+      }).join("");
+      rows.querySelectorAll("tr.clickable").forEach((tr) => {
+        tr.addEventListener("click", () => openDetail(tr.dataset.id));
+      });
+    }
+
+    async function openDetail(admId) {
+      const a = ADMISSIONS.find((x) => x.id === admId);
+      if (!a) return;
+      const p = a.patient || {};
+      const det = document.getElementById("detail");
+      det.style.display = "";
+      det.innerHTML = `<p class="muted">Loading investigations…</p>`;
+      det.scrollIntoView({ behavior: "smooth", block: "start" });
+
+      const { data: inv } = await window.sb
+        .from("investigations").select("*").eq("admission_id", admId)
+        .order("performed_at", { ascending: true });
+
+      const age = p.dob ? ageFromDob(p.dob) + "y" : "";
+      const ageSex = [age, p.sex].filter(Boolean).join(" / ");
+      const los = losDays(a);
+      const bs = billSummary(admId);
+      const comp = completeness(a);
+
+      const sec = (title, body) => body
+        ? `<div class="clin"><h3>${escapeHtml(title)}</h3><div class="body">${escapeHtml(body)}</div></div>` : "";
+      const j = (k, v) => `<div class="j"><div class="k">${escapeHtml(k)}</div><div class="v">${v}</div></div>`;
+
+      // discharge medications
+      const meds = Array.isArray(a.discharge_medications) ? a.discharge_medications : [];
+      let medsHtml = "";
+      if (meds.length) {
+        medsHtml = `<div class="clin"><h3>Discharge medications</h3>
+          <table class="data"><thead><tr><th>Drug</th><th>Strength</th><th>Dose</th><th>Route</th><th>Frequency</th><th>Duration</th><th>Instructions</th></tr></thead>
+          <tbody>${meds.map((m) => `<tr>
+            <td><strong>${escapeHtml(m.drug || "")}</strong></td><td>${escapeHtml(m.strength || "")}</td>
+            <td>${escapeHtml(m.dose || "")}</td><td>${escapeHtml(m.route || "")}</td>
+            <td>${escapeHtml(m.frequency || "")}</td><td>${escapeHtml(m.duration || "")}</td>
+            <td>${escapeHtml(m.instructions || "")}</td></tr>`).join("")}</tbody></table></div>`;
+      } else if (a.medications) {
+        medsHtml = sec("Discharge medications", a.medications);
+      }
+
+      // investigations
+      const invHtml = (inv && inv.length)
+        ? `<div class="clin"><h3>Investigations (${inv.length})</h3>
+            <table class="data"><thead><tr><th>Date</th><th>Test</th><th>Value</th><th>Units</th><th>Normal range</th><th>Comments</th></tr></thead>
+            <tbody>${inv.map((i) => `<tr>
+              <td>${fmtDate(i.performed_at)}</td><td>${escapeHtml(i.test_name)}</td>
+              <td>${escapeHtml(i.test_value || "")}</td><td>${escapeHtml(i.units || "")}</td>
+              <td>${escapeHtml(i.normal_range || "")}</td><td>${escapeHtml(i.comments || "")}</td></tr>`).join("")}</tbody></table></div>`
+        : "";
+
+      // billing correlation
+      let billHtml;
+      if (bs.bills.length === 0) {
+        billHtml = `<p class="muted">No bill linked to this admission. <a href="patient.html?id=${encodeURIComponent(p.id)}&adm=${encodeURIComponent(a.id)}">Create one from the patient page →</a></p>`;
+      } else {
+        billHtml = `<table class="data"><thead><tr><th>Bill #</th><th>Type</th><th>Date</th><th style="text-align:right">Total</th><th style="text-align:right">Paid</th><th style="text-align:right">Balance</th><th>Status</th><th>Insurance / Scheme</th><th></th></tr></thead>
+          <tbody>${bs.bills.map((b) => {
+            const bal = Number(b.total_amount || 0) - Number(b.amount_paid || 0);
+            const ins = b.insurance_type && b.insurance_type !== "Self-Pay"
+              ? `${escapeHtml(b.insurance_provider || b.insurance_type)} <small class="muted">(${escapeHtml(b.insurance_approval_status || "")})</small>`
+              : `<span class="muted">Self-Pay</span>`;
+            return `<tr>
+              <td><strong>${escapeHtml(b.bill_number)}</strong></td>
+              <td>${escapeHtml(b.bill_type)}</td>
+              <td>${fmtDate(b.billing_date)}</td>
+              <td style="text-align:right">₹${Number(b.total_amount || 0).toLocaleString("en-IN")}</td>
+              <td style="text-align:right">₹${Number(b.amount_paid || 0).toLocaleString("en-IN")}</td>
+              <td style="text-align:right">₹${bal.toLocaleString("en-IN")}</td>
+              <td><span class="badge ${b.payment_status === "Paid" ? "discharged" : "admitted"}">${escapeHtml(b.payment_status)}</span></td>
+              <td>${ins}</td>
+              <td><a class="btn small secondary" href="bill-detail.html?id=${encodeURIComponent(b.id)}">Open</a></td>
+            </tr>`;
+          }).join("")}</tbody></table>
+          <div class="bill-totals">
+            <span>Billed: <b>₹${bs.billed.toLocaleString("en-IN")}</b></span>
+            <span>Paid: <b>₹${bs.paid.toLocaleString("en-IN")}</b></span>
+            <span>Balance: <b style="color:${bs.balance > 0 ? "var(--danger)" : "var(--accent)"}">₹${bs.balance.toLocaleString("en-IN")}</b></span>
+          </div>`;
+      }
+
+      const checksHtml = comp.items.map((c) =>
+        `<span class="chk ${c.ok ? "ok" : "no"}">${c.ok ? "✓" : "✗"} ${escapeHtml(c.key)}</span>`).join("");
+
+      const dxHtml = (a.final_diagnosis || a.provisional_diagnosis)
+        ? `<div class="dx-block"><div class="lbl">Final diagnosis</div>
+            <div class="val">${escapeHtml(a.final_diagnosis || "— (not yet recorded)")}</div>
+            ${a.provisional_diagnosis ? `<div class="prov"><b>Provisional:</b> ${escapeHtml(a.provisional_diagnosis)}</div>` : ""}</div>`
+        : "";
+
+      const followBits = [];
+      if (a.follow_up_date) followBits.push("Review on " + fmtDate(a.follow_up_date));
+      if (a.follow_up) followBits.push(a.follow_up);
+
+      det.innerHTML = `
+        <div class="det-head">
+          <div>
+            <h2 style="margin:0">${escapeHtml(p.full_name || "—")}</h2>
+            <div class="muted" style="font-size:13px">MRN ${escapeHtml(p.mrn || "—")} · ${escapeHtml(ageSex || "—")} · ${escapeHtml(p.phone || "—")}${p.blood_group ? " · " + escapeHtml(p.blood_group) : ""}</div>
+          </div>
+          <div class="det-actions">
+            <a class="btn" target="_blank" href="print-discharge.html?adm=${encodeURIComponent(a.id)}">Print discharge summary</a>
+            <a class="btn secondary" href="patient.html?id=${encodeURIComponent(p.id)}&adm=${encodeURIComponent(a.id)}">Edit clinical details</a>
+            <button class="btn secondary" id="det-close">Close</button>
+          </div>
+        </div>
+
+        <div class="journey">
+          ${j("Admitted", a.admission_date ? fmtDateTime(a.admission_date) : "—")}
+          ${j("Discharged", a.discharge_date ? fmtDateTime(a.discharge_date) : '<span class="muted">In hospital</span>')}
+          ${j("Length of stay", los ? los + " day(s)" : "—")}
+          ${j("Ward / Bed", escapeHtml([a.ward, a.bed].filter(Boolean).join(" / ") || "—"))}
+          ${j("Doctor", escapeHtml(a.admitting_doctor || "—"))}
+          ${j("Type", escapeHtml(a.admission_type || "IP"))}
+        </div>
+
+        <h3 class="clin" style="margin-top:6px"><span style="font-size:12px;text-transform:uppercase;letter-spacing:.4px;color:var(--primary-dark)">Discharge readiness</span></h3>
+        <div class="check-row">${checksHtml}</div>
+
+        ${dxHtml}
+
+        ${sec("Chief complaints", a.chief_complaints)}
+        ${sec("History of present illness", a.history_present_illness)}
+        ${sec("Past history / comorbidities", a.past_history)}
+        ${sec("Known allergies", a.allergies)}
+        ${sec("Examination & vitals on admission", a.examination_findings)}
+        ${invHtml}
+        ${sec("Course in hospital", a.course_in_hospital)}
+        ${sec("Procedures / surgery performed", a.procedures)}
+        ${sec("Treatment given", a.treatment_given)}
+        ${sec("Condition at discharge", a.condition_at_discharge)}
+        ${medsHtml}
+        ${sec("Diet & activity advice", a.diet_activity_advice)}
+        ${followBits.length ? sec("Follow-up", followBits.join(" — ")) : ""}
+        ${sec("Report immediately if (warning signs)", a.warning_signs)}
+        ${sec("Additional clinical remarks", a.discharge_summary)}
+
+        <div class="clin"><h3>Billing for this admission</h3>${billHtml}</div>
+      `;
+      document.getElementById("det-close").addEventListener("click", () => { det.style.display = "none"; });
+    }
+  </script>
+</body>
+</html>
