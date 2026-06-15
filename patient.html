@@ -840,7 +840,7 @@
       f("adm-follow_up").value           = a.follow_up || "";
       f("adm-warning_signs").value       = a.warning_signs || "";
       f("adm-discharge_summary").value   = a.discharge_summary || "";
-      renderMeds(a.discharge_medications, a.medications);
+      renderMeds(a.discharge_medications, a.medications, "med-rows");
       document.getElementById("adm-title").firstChild.textContent =
         `Admission — ${fmtDate(a.admission_date)} `;
       document.getElementById("print-btn").href = `print-discharge.html?adm=${encodeURIComponent(a.id)}`;
@@ -1070,7 +1070,7 @@
           treatment_given: val("adm-treatment_given"),
           final_diagnosis: val("adm-final_diagnosis"),
           condition_at_discharge: val("adm-condition_at_discharge"),
-          discharge_medications: collectMeds(),
+          discharge_medications: collectMeds("med-rows"),
           diet_activity_advice: val("adm-diet_activity_advice"),
           follow_up_date: document.getElementById("adm-follow_up_date").value || null,
           follow_up: val("adm-follow_up"),
@@ -1092,7 +1092,7 @@
       document.getElementById("med-rows").addEventListener("click", (e) => {
         if (!e.target.classList.contains("med-del")) return;
         e.target.closest("tr").remove();
-        if (!document.querySelector("#med-rows tr")) renderMeds([]);
+        if (!document.querySelector("#med-rows tr")) renderMeds([], null, "med-rows");
       });
 
       // OP visit: new

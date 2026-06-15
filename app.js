@@ -53,7 +53,7 @@ function $$(sel, root) { return Array.from((root || document).querySelectorAll(s
 function fmtDate(iso) {
   if (!iso) return '';
   const d = new Date(iso);
-  if (isNaN(d.getTime())) return iso;
+  if (isNaN(d.getTime())) return escapeHtml(iso);
   const p = (n) => String(n).padStart(2, '0');
   return `${p(d.getDate())}-${p(d.getMonth()+1)}-${d.getFullYear()}`;
 }
@@ -61,7 +61,7 @@ function fmtDate(iso) {
 function fmtDateTime(iso) {
   if (!iso) return '';
   const d = new Date(iso);
-  if (isNaN(d.getTime())) return iso;
+  if (isNaN(d.getTime())) return escapeHtml(iso);
   const p = (n) => String(n).padStart(2, '0');
   return `${p(d.getDate())}-${p(d.getMonth()+1)}-${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
