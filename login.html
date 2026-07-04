@@ -65,7 +65,8 @@
       </button>
 
       <p class="login-footer-note">
-        Contact your administrator to reset your password<br/>or create a new staff account.
+        <a href="#" id="forgot-link">Forgot password?</a> — we'll email you a reset link.<br/>
+        New staff accounts are created by the administrator.
       </p>
     </div>
   </div>
@@ -119,6 +120,24 @@
   btn.addEventListener('click', doLogin);
   passEl.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
   emailEl.addEventListener('keydown', e => { if (e.key === 'Enter') passEl.focus(); });
+
+  // Forgot password: email a recovery link that lands on reset-password.html.
+  document.getElementById('forgot-link').addEventListener('click', async (e) => {
+    e.preventDefault();
+    const email = emailEl.value.trim();
+    if (!email) {
+      setMsg('info', 'Type your email address in the box above first, then click "Forgot password?" again.');
+      emailEl.focus();
+      return;
+    }
+    const redirectTo = new URL('reset-password.html', window.location.href).href;
+    const { error } = await client.auth.resetPasswordForEmail(email, { redirectTo });
+    if (error) {
+      setMsg('error', error.message || 'Could not send the reset email.');
+    } else {
+      setMsg('success', 'Reset link sent. Check your email inbox (and spam folder) and open the link on this device.');
+    }
+  });
 })();
 </script>
 

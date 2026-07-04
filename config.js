@@ -9,9 +9,9 @@ window.PONUGOTI_CONFIG = {
   HOSPITAL_TAGLINE: "Patient Records System",
 
   // --- Official header details (shown on printed discharge summaries / bills) ---
-  // EDIT these to your real details. Leave blank ("") to hide a line.
-  HOSPITAL_ADDRESS: "",          // e.g. "Main Road, Yourtown, Andhra Pradesh - 500001"
-  HOSPITAL_PHONE: "",            // e.g. "+91 98765 43210"
-  HOSPITAL_EMAIL: "",            // e.g. "ponugotihospital@gmail.com"
-  HOSPITAL_REGN: "",             // e.g. "Regn. No: AP/HOSP/2020/1234"
+  // Leave blank ("") to hide a line.
+  HOSPITAL_ADDRESS: "Nehru Center, Mahabubabad, Telangana",
+  HOSPITAL_PHONE: "Ph: 72073 16261",
+  HOSPITAL_EMAIL: "ponugotihospital@gmail.com",
+  HOSPITAL_REGN: "",             // e.g. "Regn. No: TG/HOSP/2020/1234" (add when available)
 };
