@@ -186,7 +186,7 @@
       window.sb.from('patients').select('id', { count: 'exact', head: true }),
       window.sb.from('admissions').select('id', { count: 'exact', head: true }).is('discharge_date', null),
       window.sb.from('op_visits').select('id', { count: 'exact', head: true }).gte('visit_date', today + 'T00:00:00').lte('visit_date', today + 'T23:59:59'),
-      window.sb.from('invoices').select('id', { count: 'exact', head: true }).in('status', ['Pending', 'Partially Paid']),
+      window.sb.from('bills').select('id', { count: 'exact', head: true }).in('payment_status', ['Unpaid', 'Partially Paid']),
     ]);
     const v = (r) => r.status === 'fulfilled' ? (r.value.count ?? 0) : '—';
     document.getElementById('s-patients').textContent   = v(ptRes);
@@ -277,7 +277,7 @@
     const tbody = document.getElementById('admit-tbody');
     const { data, error } = await window.sb
       .from('admissions')
-      .select('id, ward, admission_date, patients(full_name)')
+      .select('id, ward, admission_date, patient_id, patients(full_name)')
       .is('discharge_date', null)
       .order('admission_date', { ascending: false })
       .limit(6);
@@ -286,31 +286,31 @@
       return;
     }
     tbody.innerHTML = data.map(a => `
-      <tr class="clickable" onclick="window.location='patient.html?id=${a.patients?.id || ''}'">
+      <tr class="clickable" onclick="window.location='patient.html?id=${encodeURIComponent(a.patient_id)}&adm=${encodeURIComponent(a.id)}'">
         <td><span class="pt-name">${escapeHtml(a.patients?.full_name || '—')}</span></td>
         <td>${escapeHtml(a.ward || '—')}</td>
         <td style="font-size:13px;color:var(--muted)">${fmtDate(a.admission_date)}</td>
       </tr>`).join('');
   }
 
-  // -- Pending invoices --
+  // -- Pending bills --
   async function loadPending() {
     const tbody = document.getElementById('pending-tbody');
     const { data, error } = await window.sb
-      .from('invoices')
-      .select('id, invoice_no, balance, patients(full_name)')
-      .in('status', ['Pending', 'Partially Paid'])
-      .order('invoice_date', { ascending: false })
+      .from('bills')
+      .select('id, bill_number, total_amount, amount_paid, patients(full_name)')
+      .in('payment_status', ['Unpaid', 'Partially Paid'])
+      .order('billing_date', { ascending: false })
       .limit(6);
     if (error || !data || data.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="3" class="empty">No pending invoices.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="3" class="empty">No pending bills.</td></tr>`;
       return;
     }
-    tbody.innerHTML = data.map(inv => `
-      <tr class="clickable" onclick="window.location='billing.html?invoice=${inv.id}'">
-        <td>${escapeHtml(inv.patients?.full_name || '—')}</td>
-        <td><code style="font-size:12px;color:var(--muted)">${escapeHtml(inv.invoice_no)}</code></td>
-        <td class="money" style="color:var(--danger);font-weight:600">${fmtMoney(inv.balance)}</td>
+    tbody.innerHTML = data.map(b => `
+      <tr class="clickable" onclick="window.location='bill-detail.html?id=${encodeURIComponent(b.id)}'">
+        <td>${escapeHtml(b.patients?.full_name || '—')}</td>
+        <td><code style="font-size:12px;color:var(--muted)">${escapeHtml(b.bill_number)}</code></td>
+        <td class="money" style="color:var(--danger);font-weight:600">${fmtMoney(Number(b.total_amount || 0) - Number(b.amount_paid || 0))}</td>
       </tr>`).join('');
   }
 
@@ -320,16 +320,25 @@
     btn.disabled = true;
     btn.innerHTML = '<i class="ti ti-loader-2"></i> Exporting…';
     try {
-      const { data } = await window.sb.from('patients')
-        .select('*').order('created_at', { ascending: false });
-      const json = JSON.stringify(data || [], null, 2);
+      // Full backup: this JSON is the only recovery path on the free tier,
+      // so it must include every clinical + billing table, not just patients.
+      const tables = ['patients', 'admissions', 'investigations', 'op_visits',
+                      'bills', 'bill_items', 'profiles'];
+      const results = await Promise.all(tables.map(t => window.sb.from(t).select('*')));
+      const failed = results.map((r, i) => r.error ? tables[i] : null).filter(Boolean);
+      if (failed.length) throw new Error('Backup failed for: ' + failed.join(', '));
+      const dump = { exported_at: new Date().toISOString() };
+      tables.forEach((t, i) => { dump[t] = results[i].data || []; });
+      const json = JSON.stringify(dump, null, 2);
       const blob = new Blob([json], { type: 'application/json' });
       const url  = URL.createObjectURL(blob);
       const a    = document.createElement('a');
       a.href = url;
-      a.download = `ponugoti-patients-${today}.json`;
+      a.download = `ponugoti-hospital-backup-${today}.json`;
       a.click();
       URL.revokeObjectURL(url);
+    } catch (e) {
+      alert(e.message || 'Backup failed.');
     } finally {
       btn.disabled = false;
       btn.innerHTML = '<i class="ti ti-download"></i> Export';

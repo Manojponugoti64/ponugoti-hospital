@@ -792,7 +792,7 @@
       if (!CURRENT_OPV) return;
       const msg = document.getElementById("msg");
       const { data: existing, error: e1 } = await window.sb
-        .from("bills").select("id").eq("op_visit_id", CURRENT_OPV.id).maybeSingle();
+        .from("bills").select("id").eq("op_visit_id", CURRENT_OPV.id).limit(1).maybeSingle();
       if (e1) { showMsg(msg, "error", e1.message); return; }
       if (existing) { window.location.href = `bill-detail.html?id=${encodeURIComponent(existing.id)}`; return; }
       const billNo = await generateBillNumber("OP");
@@ -1234,6 +1234,7 @@
           .from("bills")
           .select("id")
           .eq("admission_id", CURRENT_ADM.id)
+          .limit(1)
           .maybeSingle();
         if (checkErr) { showMsg(document.getElementById("msg"), "error", checkErr.message); return; }
         

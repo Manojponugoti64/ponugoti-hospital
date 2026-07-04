@@ -410,6 +410,7 @@
           .from("bills")
           .select("id")
           .eq("admission_id", admId)
+          .limit(1)
           .maybeSingle();
         
         if (checkErr) { showMsg(modalMsg, "error", checkErr.message); return; }
