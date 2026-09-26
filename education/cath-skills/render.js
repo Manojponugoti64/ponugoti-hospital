@@ -6,6 +6,7 @@
  *   node render.js --still <seconds> <out.png>     one frame (for review)
  *   node render.js --range <f0> <f1> <out.mp4>     frames [f0, f1) as a video segment
  *   node render.js --all [workers]                 whole video + narration -> build/*.mp4
+ *   node render.js --mux                           re-mux existing segments with narration/captions
  *
  * Every scene is a pure function of time; beat start times come from
  * build/timings.json (written by tts.py), so visuals land on the words.
@@ -1798,14 +1799,17 @@ async function renderAll(workers) {
     }));
   }
   await Promise.all(jobs);
-  const list = path.join(BUILD, 'segments.txt');
-  fs.writeFileSync(list, segs.map(s => `file '${s}'`).join('\n') + '\n');
+  fs.writeFileSync(path.join(BUILD, 'segments.txt'), segs.map(s => `file '${s}'`).join('\n') + '\n');
+  await mux();
+}
+async function mux() {
   const out = path.join(BUILD, OUT_NAME);
-  await ffmpeg(['-f', 'concat', '-safe', '0', '-i', list, '-i', path.join(BUILD, 'narration.wav'), '-i', path.join(BUILD, 'captions.srt'),
+  // no -shortest: it would also count the caption track and clip the end card
+  await ffmpeg(['-f', 'concat', '-safe', '0', '-i', path.join(BUILD, 'segments.txt'), '-i', path.join(BUILD, 'narration.wav'), '-i', path.join(BUILD, 'captions.srt'),
     '-map', '0:v', '-map', '1:a', '-map', '2:s', '-c:v', 'copy',
-    '-af', 'loudnorm=I=-16:TP=-1.5:LRA=11', '-c:a', 'aac', '-b:a', '128k', '-ar', '48000',
+    '-af', 'loudnorm=I=-16:TP=-1.5:LRA=11', '-c:a', 'aac', '-b:a', '96k', '-ar', '48000',
     '-c:s', 'mov_text', '-metadata:s:s:0', 'language=eng', '-metadata', `title=Cath Lab Skills — pharmaco-invasive PCI to the LAD`,
-    '-movflags', '+faststart', '-shortest', out]);
+    '-movflags', '+faststart', out]);
   console.log('wrote', out);
 }
 
@@ -1819,10 +1823,12 @@ async function main() {
     }
   } else if (mode === '--range') {
     await renderRange(parseInt(rest[0], 10), parseInt(rest[1], 10), rest[2]);
+  } else if (mode === '--mux') {
+    await mux();
   } else if (mode === '--all') {
     await renderAll(parseInt(rest[0] || String(Math.max(1, os.cpus().length)), 10));
   } else {
-    console.log('usage: render.js --still <sec> <out.png> [...] | --range <f0> <f1> <out.mp4> | --all [workers]');
+    console.log('usage: render.js --still <sec> <out.png> [...] | --range <f0> <f1> <out.mp4> | --all [workers] | --mux');
   }
 }
 if (require.main === module) main().catch(e => { console.error(e); process.exit(1); });
