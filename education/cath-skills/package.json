@@ -1,0 +1,14 @@
+{
+  "name": "cath-skills-video",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Narrated teaching animation: approach to a pharmaco-invasive PCI to the LAD (de-identified case).",
+  "scripts": {
+    "render": "node render.js --all",
+    "still": "node render.js --still"
+  },
+  "dependencies": {
+    "@fontsource/inter": "^5.3.0",
+    "@napi-rs/canvas": "^1.0.9"
+  }
+}

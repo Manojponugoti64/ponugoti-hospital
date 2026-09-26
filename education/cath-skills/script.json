@@ -1,0 +1,160 @@
+{
+  "title": "Cath Lab Skills: Approach to a Pharmaco-invasive PCI to the LAD",
+  "note": "Narration source of truth. Written form is used for captions; tts.py maps acronyms (LAD, RAO, PCI...) to phonemes. De-identified: no names, IDs, dates, institution or staff.",
+  "voice": "af_heart",
+  "speed": 1.0,
+  "scenes": [
+    {
+      "id": "title",
+      "step": 0,
+      "beats": [
+        {"id": "t1", "text": "Cath lab skills, one real case at a time."},
+        {"id": "t2", "text": "Today we'll work through a pharmaco-invasive PCI to the LAD, step by step. How to think about the case, how to read the angiogram, why each piece of hardware was chosen, and what can go wrong."},
+        {"id": "t3", "text": "The case is de-identified, and this is teaching material only. Learn and operate under supervision, and follow your own lab's protocols."}
+      ]
+    },
+    {
+      "id": "roadmap",
+      "step": 0,
+      "beats": [
+        {"id": "r1", "text": "Every cath case is a chain of decisions. Here is a seven-step approach you can reuse on every case."},
+        {"id": "r2", "text": "One, the patient and the indication. Two, the pre-cath checklist. Three, arterial access."},
+        {"id": "r3", "text": "Four, the diagnostic angiogram. Five, reading the films and making a plan."},
+        {"id": "r4", "text": "Six, the PCI itself. And seven, finishing well: the result, complications, and documentation."},
+        {"id": "r5", "text": "At the end, you'll get a practical plan for building these skills yourself."}
+      ]
+    },
+    {
+      "id": "case",
+      "step": 1,
+      "beats": [
+        {"id": "c1", "text": "Step one: the patient and the indication. A woman in her sixties with type 2 diabetes had an acute anterior wall ST elevation myocardial infarction."},
+        {"id": "c2", "text": "Anterior wall means ST elevation across the precordial leads, V1 to V4. That points to the left anterior descending artery, the LAD, as the likely culprit."},
+        {"id": "c3", "text": "Her echo showed mildly reduced left ventricular function, an ejection fraction of forty-seven percent, with mild mitral regurgitation."},
+        {"id": "c4", "text": "She was treated with a pharmaco-invasive strategy. When primary PCI can't be delivered within about 120 minutes of diagnosis, we give fibrinolysis first."},
+        {"id": "c5", "text": "If lysis fails, meaning less than fifty percent ST resolution at sixty to ninety minutes, or if there's shock, arrhythmia, or ongoing ischemia, the patient goes for rescue PCI immediately."},
+        {"id": "c6", "text": "If lysis succeeds, we still bring the patient to the lab routinely, within 2 to 24 hours, to deal with the culprit lesion. That's where our case begins."}
+      ]
+    },
+    {
+      "id": "checklist",
+      "step": 2,
+      "beats": [
+        {"id": "k1", "text": "Step two: the pre-cath checklist. Most complications are prevented before the needle touches the skin."},
+        {"id": "k2", "text": "Confirm informed consent. Check renal function. She is diabetic, so contrast kidney injury is a real risk: plan hydration, and keep contrast to a minimum."},
+        {"id": "k3", "text": "Check hemoglobin, platelets and coagulation, especially after a lytic. Ask about contrast allergy. Make sure antiplatelet and anticoagulant doses, and their timing, are documented."},
+        {"id": "k4", "text": "Feel the radial pulse, know where your bail-out kit is, and finish with a team time-out."}
+      ]
+    },
+    {
+      "id": "access",
+      "step": 3,
+      "beats": [
+        {"id": "a1", "text": "Step three: access. The note opens with a shorthand that means: under strict aseptic precautions, under local anaesthesia, the right radial artery was punctured and secured with a six French sheath."},
+        {"id": "a2", "text": "Why radial? In acute coronary syndromes, radial access means less bleeding and fewer access-site complications than femoral, and guidelines recommend it as the default."},
+        {"id": "a3", "text": "Puncture one to two centimetres above the radial styloid, where the artery is superficial. After a little local anaesthetic, advance the needle at thirty to forty-five degrees until you see a flashback of blood."},
+        {"id": "a4", "text": "Pass the wire gently. It should never meet resistance. Then slide the sheath in over the wire."},
+        {"id": "a5", "text": "Through the sheath, give a spasmolytic cocktail and heparin, per your lab's protocol. The diagnostic note records twenty-five hundred units of heparin. Heparin also protects the radial artery from occluding afterwards."},
+        {"id": "a6", "text": "If the catheter feels sticky or the patient has forearm pain, think spasm. Stop, give more vasodilator, and never pull hard against a spastic artery."}
+      ]
+    },
+    {
+      "id": "diagnostic",
+      "step": 4,
+      "beats": [
+        {"id": "d1", "text": "Step four: the diagnostic angiogram. From the right radial, a single five French Tiger catheter can engage both coronary arteries."},
+        {"id": "d2", "text": "It travels up the radial and brachial arteries into the subclavian, then down into the ascending aorta, just above the coronary ostia."},
+        {"id": "d3", "text": "Watch the pressure trace before every injection. Aortic pressure here was 140 over 80. If the pressure dampens as you engage, pull back. The catheter may be wedged in the ostium, or sitting against an ostial lesion."},
+        {"id": "d4", "text": "Film each artery in several angulated views. A lesion that looks mild in one view can be critical in another."},
+        {"id": "d5", "text": "For the left main and circumflex, use LAO caudal, the spider view, and RAO caudal. For the LAD, use cranial views: AP cranial, RAO cranial to separate the septals from the diagonals, and LAO cranial."},
+        {"id": "d6", "text": "For the right coronary artery, use LAO and RAO views, adding LAO cranial to open up the crux. This whole study used just fifty millilitres of iohexol. Respect contrast in a diabetic patient."}
+      ]
+    },
+    {
+      "id": "reading",
+      "step": 5,
+      "beats": [
+        {"id": "f1", "text": "Step five: reading the films. Go artery by artery, segment by segment, in the same order every time."},
+        {"id": "f2", "text": "The left main is normal, and divides into the LAD and the circumflex."},
+        {"id": "f3", "text": "The LAD is a type 3 vessel: it wraps around the apex and supplies part of the inferior wall too. So a large territory of myocardium is at stake."},
+        {"id": "f4", "text": "There's minimal plaque at the ostium, and the proximal LAD is normal. In the mid LAD there's a ninety-nine percent discrete, eccentric stenosis, straddling the second septal branch, with only TIMI 1 flow beyond it."},
+        {"id": "f5", "text": "Know TIMI flow grades cold. Grade zero: no flow beyond the lesion. Grade one: contrast passes the lesion but doesn't fill the distal vessel. Grade two: the distal vessel fills, but slowly. Grade three: normal, brisk flow."},
+        {"id": "f6", "text": "The circumflex is co-dominant, with a large first obtuse marginal and a left posterolateral branch, all normal."},
+        {"id": "f7", "text": "The right coronary is also co-dominant. It has a twenty to thirty percent proximal plaque with TIMI 3 flow, and gives off the posterior descending artery."},
+        {"id": "f8", "text": "Angiographic diagnosis: a co-dominant system with single-vessel disease of the LAD. The lesion matches the ECG territory, so it's our culprit. The plan: PCI to the LAD."},
+        {"id": "f9", "text": "One documentation lesson. The angiogram report places this lesion in the mid LAD, at the second septal. The PCI note calls it proximal LAD. By the SYNTAX segment definitions, the proximal LAD ends at the first major septal branch, so a lesion at the second septal is mid LAD. Reconcile segment names before you sign, because the next operator will plan from your words."}
+      ]
+    },
+    {
+      "id": "hardware",
+      "step": 5,
+      "beats": [
+        {"id": "h1", "text": "Now the hardware. You should be able to say why every device is on the table."},
+        {"id": "h2", "text": "The guide catheter: a six French EBU 3.5. Extra backup guides brace against the opposite wall of the aorta, giving strong support to push balloons and stents down the LAD. Size the curve to the aortic root: smaller for a small root, larger for a dilated one."},
+        {"id": "h3", "text": "The wire: a zero point zero one four inch BMW. It's a workhorse wire, with a soft tip and good steering, and it's the right first choice for a non-occlusive lesion like this."},
+        {"id": "h4", "text": "For pre-dilation, a two by ten millimetre semi-compliant balloon, deliberately undersized, to open the lesion and make room for the stent."},
+        {"id": "h5", "text": "The stent: a two point five by twenty-four millimetre drug-eluting stent. Choose the diameter from the distal reference vessel. Choose the length to cover the lesion from healthy segment to healthy segment, leaving no disease at the edges."},
+        {"id": "h6", "text": "For post-dilation, a two point five by ten millimetre non-compliant, or NC, balloon. A non-compliant balloon barely grows as pressure rises, so it can expand the stent with high force without overstretching the artery. Keep it shorter than the stent, and inside it."},
+        {"id": "h7", "text": "Where available, intravascular imaging with IVUS or OCT shows the true vessel size and confirms stent expansion. Guidelines increasingly favour it, especially for complex lesions."},
+        {"id": "h8", "text": "Before the PCI, top up anticoagulation. Unfractionated heparin is typically seventy to one hundred units per kilogram, aiming for an activated clotting time, or ACT, of about 250 to 350 seconds, adjusted for whatever anticoagulant she received with the lytic."}
+      ]
+    },
+    {
+      "id": "pci",
+      "step": 6,
+      "beats": [
+        {"id": "p1", "text": "Step six: the PCI. Engage the left coronary with the EBU guide. Check that it sits coaxially and that the pressure isn't damped. Then take a check angiogram."},
+        {"id": "p2", "text": "The check angiogram confirms the critical lesion. Choose a working view that shows it without overlap or foreshortening, and stay in that view for the key steps."},
+        {"id": "p3", "text": "Wiring. Put a small curve on the wire tip, torque it across the lesion, and park it well down in the distal LAD. Keep the tip in view. In a wrap-around LAD, it can drift into a small apical branch and perforate."},
+        {"id": "p4", "text": "Pre-dilate. The two millimetre balloon was inflated three times, at eight, ten and ten atmospheres, for ten, ten and eight seconds. Watch the waist on the balloon disappear, and watch the ECG and blood pressure during each inflation."},
+        {"id": "p5", "text": "Position the stent. Line up its markers so it covers the whole lesion, with healthy landing zones at both ends. A small puff of contrast confirms the position before you inflate."},
+        {"id": "p6", "text": "Deploy. The stent was expanded at fourteen, then sixteen atmospheres, for ten and twelve seconds. Inflate steadily, hold, and deflate fully before you move anything."},
+        {"id": "p7", "text": "Optimize. The NC balloon goes inside the stent and is inflated to fourteen atmospheres for twelve seconds, to fully expand the stent against the vessel wall."},
+        {"id": "p8", "text": "Final check, in at least two orthogonal views. Here there's TIMI 3 flow, with no flap, no dissection, and no thrombus. Look at the stent edges, and at the septal branch you stented across."},
+        {"id": "p9", "text": "Impression: successful PCI to the LAD with a two point five by twenty-four millimetre drug-eluting stent."}
+      ]
+    },
+    {
+      "id": "complications",
+      "step": 7,
+      "beats": [
+        {"id": "x1", "text": "What can go wrong? Know your first move for each complication before the case starts, not during it."},
+        {"id": "x2", "text": "Slow flow or no-reflow is common in ST elevation infarction. Rule out a dissection, then give intracoronary vasodilators such as adenosine, verapamil or nitroprusside."},
+        {"id": "x3", "text": "Edge dissection: assess it in two views. A flow-limiting dissection usually needs another stent."},
+        {"id": "x4", "text": "Perforation: inflate a balloon at the site straight away to seal it. Then think covered stent or coils, get an echo for tamponade, and do pericardiocentesis if needed. Reversing heparin is a senior decision."},
+        {"id": "x5", "text": "Side-branch loss: we stented across the second septal, so confirm it still fills."},
+        {"id": "x6", "text": "At the wrist: spasm, hematoma, or radial occlusion. Use a compression band with patent hemostasis: enough pressure to stop the bleeding, while flow through the artery continues."}
+      ]
+    },
+    {
+      "id": "finish",
+      "step": 7,
+      "beats": [
+        {"id": "e1", "text": "Step seven: finishing well. Continue dual antiplatelet therapy per protocol. After a lytic, clopidogrel is the usual P2Y12 partner for aspirin."},
+        {"id": "e2", "text": "Add a high-intensity statin, an ACE inhibitor given her diabetes and reduced ejection fraction, a beta blocker where indicated, and an SGLT2 inhibitor for her diabetes. Repeat the echo, and refer her to cardiac rehabilitation."},
+        {"id": "e3", "text": "Then document. This note does a lot well: every device with its size, every inflation with its pressure and time, and the final result."},
+        {"id": "e4", "text": "To make it complete, also record the heparin dose and ACT, total contrast volume, fluoroscopy time and radiation dose, TIMI flow and percent stenosis before and after, device lot numbers, and a clear statement on complications."}
+      ]
+    },
+    {
+      "id": "learning",
+      "step": 8,
+      "beats": [
+        {"id": "l1", "text": "Finally, how do you build these skills? Think of a ladder, and climb one rung at a time."},
+        {"id": "l2", "text": "Rung one: anatomy and views. Read each angiogram before you read its report. Write your own findings, then compare. Fifty films will change how you see."},
+        {"id": "l3", "text": "Rung two: hardware fluency. Handle every device. Know its size, what it's compatible with, and why you'd choose it. Prepare balloons and load stents until it's automatic."},
+        {"id": "l4", "text": "Rung three: simulator and bench practice. Wire torque, balloon preparation, and drills for no-reflow and perforation."},
+        {"id": "l5", "text": "Rung four: graded hands-on steps under supervision. Access first, then diagnostic catheters, then wiring and balloons, and finally stenting."},
+        {"id": "l6", "text": "Rung five: a personal case log. Before each case, write your plan and your prediction. Afterwards, note what happened, what surprised you, and one thing you'd change. Track your access success, contrast volume and fluoroscopy time. That log becomes your own private evaluation, and it compounds."}
+      ]
+    },
+    {
+      "id": "recap",
+      "step": 9,
+      "beats": [
+        {"id": "z1", "text": "To recap the seven steps: patient and indication, pre-cath checklist, access, diagnostic angiogram, reading and planning, the PCI, and finishing well."},
+        {"id": "z2", "text": "Use this framework on your next case, and every case after it. See you in the lab."}
+      ]
+    }
+  ]
+}
